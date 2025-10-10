@@ -9,9 +9,27 @@ import 'lounge/lounge_activity_screen.dart';
 import 'main_screen.dart';
 import 'notifications/notification_center_screen.dart';
 
+import '../services/api_service.dart';
+import '../models/news_model.dart';
+import '../models/stock_model.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late Future<List<News>> newsFuture;
+  late Future<List<Stock>> topStocksFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    newsFuture = ApiService().fetchHomeNews();
+    topStocksFuture = ApiService().fetchTop5Stocks();
+  }
 
   void showTopToast(BuildContext context) {
     final overlay = Overlay.of(context);
@@ -30,7 +48,6 @@ class HomeScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  // 4번째 탭이 선택된 MainScreen으로 이동
                   builder: (context) => const MainScreen(initialIndex: 4),
                 ),
               );
@@ -47,16 +64,16 @@ class HomeScreen extends StatelessWidget {
                   )
                 ],
               ),
-              child: RichText(
-                text: TextSpan(
-                  style: const TextStyle(
+              child: const Text.rich(
+                TextSpan(
+                  style: TextStyle(
                       fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold),
                   children: [
-                    const TextSpan(text: "[한화오션] 주가변동 예측 영향도 "),
+                    TextSpan(text: "[한화오션] 주가변동 예측 영향도 "),
                     TextSpan(
                         text: "+2.2%",
-                        style: const TextStyle(color: Colors.red)),
-                    const TextSpan(text: " 포착 📸"),
+                        style: TextStyle(color: Colors.red)),
+                    TextSpan(text: " 포착 📸"),
                   ],
                 ),
               ),
@@ -75,14 +92,11 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // --- [추가됨] 남색을 변수로 정의 ---
-    const Color navyColor = Color(0xFF2B3A66); // 예시 남색, 원하시는 색상으로 변경 가능
+    const Color navyColor = Color(0xFF2B3A66);
 
     return Scaffold(
-      // --- [수정됨] Scaffold의 배경색을 남색으로 변경합니다. ---
       backgroundColor: navyColor,
       appBar: AppBar(
-        // --- [수정됨] AppBar의 배경색도 남색으로 통일합니다. ---
         backgroundColor: navyColor,
         surfaceTintColor: navyColor,
         elevation: 0,
@@ -91,7 +105,6 @@ class HomeScreen extends StatelessWidget {
           padding: const EdgeInsets.only(top: 20.0),
           child: IconButton(
             iconSize: 30.0,
-            // --- [수정됨] 아이콘 색상을 흰색으로 변경 ---
             icon: const Icon(Icons.menu, color: Colors.white),
             onPressed: () {
               Navigator.of(context).push(
@@ -103,7 +116,7 @@ class HomeScreen extends StatelessWidget {
         actions: [
           IconButton(
             iconSize: 10.0,
-            icon: const Icon(Icons.circle, color: Colors.white), // <-- 이제 아이콘이 보입니다.
+            icon: const Icon(Icons.circle, color: Colors.white),
             onPressed: () {
               Future.delayed(const Duration(seconds: 15), () {
                 showTopToast(context);
@@ -116,10 +129,9 @@ class HomeScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- [수정됨] 1. 상단 남색 배경 섹션 ---
             Container(
-              color: navyColor, // 이 컨테이너의 배경색을 남색으로 설정
-              padding: const EdgeInsets.only(bottom: 24.0), // 하단 여백
+              color: navyColor,
+              padding: const EdgeInsets.only(bottom: 24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -127,7 +139,6 @@ class HomeScreen extends StatelessWidget {
                     offset: const Offset(-50.0, 0),
                     child: Image.asset(
                       'assets/images/stockpulse_logo_white.png',
-                      // TODO: 남색 배경에 잘 보이는 로고로 변경 필요
                       height: 60,
                       width: 350,
                     ),
@@ -136,9 +147,8 @@ class HomeScreen extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
                     child: RichText(
-                      text: const TextSpan(
-                        style: TextStyle(
-                          // --- [수정됨] 기본 텍스트 색상을 흰색으로 변경 ---
+                      text: TextSpan(
+                        style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -147,7 +157,7 @@ class HomeScreen extends StatelessWidget {
                         children: [
                           TextSpan(
                             text: '플러스',
-                            style: TextStyle(color: Color(0xFFFFB31A)),
+                            style: const TextStyle(color: Color(0xFFFFB31A)),
                           ),
                           TextSpan(text: '님, 반가워요!'),
                         ],
@@ -180,29 +190,50 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
             ),
-
-            // --- [수정됨] 2. 하단 흰색 배경 섹션 ---
             Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
-                // --- [추가됨] 위쪽 모서리만 둥글게 설정 ---
                 borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(10.0),  // 왼쪽 위
-                  topRight: Radius.circular(10.0), // 오른쪽 위
+                  topLeft: Radius.circular(10.0),
+                  topRight: Radius.circular(10.0),
                 ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 20),
-                  const HomeNewsSection(),
+                  FutureBuilder<List<News>>(
+                    future: newsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(child: Text('뉴스 로드 실패: ${snapshot.error}'));
+                      }
+                      final newsList = snapshot.data ?? [];
+                      return HomeNewsSection(newsList: newsList);
+                    },
+                  ),
                   const SizedBox(height: 30),
                   Container(
                     height: 8,
                     color: const Color(0xFFF9FAFB),
                   ),
                   const SizedBox(height: 20),
-                  const HomeTop5Section(),
+                  FutureBuilder<List<Stock>>(
+                    future: topStocksFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Top5 주식 로드 실패: ${snapshot.error}'));
+                      }
+                      final stockList = snapshot.data ?? [];
+                      return HomeTop5Section(stockList: stockList);
+                    },
+                  ),
                   const SizedBox(height: 24),
                 ],
               ),

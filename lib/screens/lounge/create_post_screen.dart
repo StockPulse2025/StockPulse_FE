@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../models/news_model.dart';
+import 'package:stockpulse2/models/stock_model.dart';
+import '../../services/api_service.dart';
 import '../main_screen.dart';
 import 'post_detail_screen.dart';
-import 'post_detail_no_poll_screen.dart';
 import 'stock_selection_screen.dart';
 
 class CreatePostScreen extends StatefulWidget {
@@ -19,11 +20,13 @@ class CreatePostScreen extends StatefulWidget {
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
   bool _showPoll = true;
-  StockData? _selectedStock;
+  Stock? _selectedStock;
   final Color navyColor = const Color(0xFF2B3A66);
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
+
+  final ApiService apiService = ApiService();
 
   @override
   void dispose() {
@@ -33,7 +36,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   void _navigateToStockSelection() async {
-    final result = await Navigator.push<StockData?>(
+    final result = await Navigator.push<Stock?>(
       context,
       MaterialPageRoute(builder: (context) => const StockSelectionScreen()),
     );
@@ -44,10 +47,43 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
+  void _submitPost() async {
+    final title = _titleController.text.trim();
+    final content = _contentController.text.trim();
+
+    final int? createdPostId = await apiService.createPost(
+      newsId: widget.newsData.newsId,
+      title: title,
+      content: content,
+      stockId: _selectedStock?.stockId ?? 0,
+      requireVote: _showPoll,
+    );
+
+    if (createdPostId != null) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const MainScreen(initialIndex: 3)),
+            (route) => false,
+      );
+
+      if (_showPoll) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+              builder: (_) => PostDetailScreen(postId: createdPostId, isPollPost: true)),
+        );
+      } else {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+              builder: (_) => PostDetailScreen(postId: createdPostId, isPollPost: false)),
+        );
+      }
+    } else {
+      // 실패 처리
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -58,14 +94,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         titleSpacing: 0,
         centerTitle: false,
         title: const Text('게시글 작성', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        // --- [수정 완료] actions가 비어 있으므로 AppBar의 버튼은 완전히 제거되었습니다. ---
         actions: const [],
       ),
       body: Stack(
         children: [
-          // 스크롤 가능한 콘텐츠 영역
           SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 100), // 하단 버튼에 가려지지 않도록 충분한 여백
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -98,31 +132,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               ],
             ),
           ),
-
-          // --- [확인] 오른쪽 하단에 위치한 '유일한' 완료 버튼 ---
-          // 모든 화면 이동 기능이 이 버튼의 onPressed에 포함되어 있습니다.
           Positioned(
             bottom: 24,
             right: 24,
             child: ElevatedButton(
-              onPressed: () {
-                // 1. 라운지 메인 화면으로 돌아가기
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const MainScreen(initialIndex: 3)),
-                      (Route<dynamic> route) => false,
-                );
-
-                // 2. 투표 유무에 따라 다른 상세 페이지 열기
-                if (_showPoll) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (context) => const PostDetailScreen(isPollPost: true)),
-                  );
-                } else {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (context) => const PostDetailNoPollScreen()),
-                  );
-                }
-              },
+              onPressed: _submitPost,
               style: ElevatedButton.styleFrom(
                 backgroundColor: navyColor,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -154,14 +168,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       color: const Color(0xFFF9FAFB),
       child: Row(
         children: [
-          Image.asset(widget.newsData.imageUrl, width: 80, height: 80, fit: BoxFit.cover),
+          Image.network(widget.newsData.newsImage),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(widget.newsData.title, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                Text(widget.newsData.newsTitle, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
                 Text(widget.newsData.dateSource, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC2C2C2))),
               ],
@@ -173,7 +187,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Widget _buildStockSelector() {
-    final bool isUp = _selectedStock?['change']?.startsWith('+') ?? false;
+    final bool isUp = (_selectedStock?.changeAmount ?? 0) > 0;
 
     return InkWell(
       onTap: _navigateToStockSelection,
@@ -187,21 +201,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 ? const Text('토론할 종목을 선택해주세요', style: TextStyle(fontWeight: FontWeight.bold))
                 : Row(
               children: [
-                CircleAvatar(backgroundImage: AssetImage(_selectedStock!['logoPath']!)),
+                CircleAvatar(
+                  backgroundImage: NetworkImage(_selectedStock!.imageUrl ?? 'https://default-image-url.com/default.png'),
+                ),
                 const SizedBox(width: 8),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_selectedStock!['name']!, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(_selectedStock!.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                     Row(
                       children: [
-                        Text(_selectedStock!['price']!, style: const TextStyle(fontSize: 12)),
+                        Text(_selectedStock!.currentPrice.toString(), style: const TextStyle(fontSize: 12)),
                         const SizedBox(width: 4),
-                        Text(_selectedStock!['change']!, style: TextStyle(color: isUp ? Colors.red : Colors.blue, fontSize: 12)),
+                        Text(
+                          _selectedStock!.changeAmount.toString(),
+                          style: TextStyle(color: isUp ? Colors.red : Colors.blue, fontSize: 12),
+                        ),
                       ],
                     ),
                   ],
-                )
+                ),
               ],
             ),
             const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
@@ -243,6 +262,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       ),
     );
   }
+
   Widget _buildPollItem(String title) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),

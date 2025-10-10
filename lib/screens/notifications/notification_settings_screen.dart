@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../services/api_service.dart';
+import 'package:flutter/material.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -17,6 +19,31 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
 
   final Color navyColor = const Color(0xFF2B3A66);
   final Color sliderInactiveColor = const Color(0xFFACB0BF);
+  final ApiService apiService = ApiService();
+
+  // 저장 기능 연동
+  Future<void> _saveSettings() async {
+    try {
+      await apiService.saveFilterSettings(
+        sortOrder: 'default',
+        stockFilter: _holdingsFilter ? 'holdings' : (_watchlistFilter ? 'watchlist' : 'all'),
+        selectedIndustries: [],
+        neutral: _neutralFilter,
+        good: _goodNewsFilter,
+        goodRange: _goodNewsRange,
+        bad: _badNewsFilter,
+        badRange: _badNewsRange,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('설정이 저장되었습니다.')));
+      }
+      Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('설정 저장 실패: $e')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,9 +80,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       ],
                     ),
                   ),
-
                   Container(height: 8, color: const Color(0xFFF9FAFB)),
-
                   Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
@@ -77,14 +102,23 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
               ),
             ),
           ),
-          // 하단 버튼
           Padding(
             padding: const EdgeInsets.all(24),
             child: Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      setState(() {
+                        _holdingsFilter = true;
+                        _watchlistFilter = false;
+                        _neutralFilter = false;
+                        _goodNewsFilter = true;
+                        _badNewsFilter = true;
+                        _goodNewsRange = const RangeValues(50, 100);
+                        _badNewsRange = const RangeValues(20, 70);
+                      });
+                    },
                     child: Text('초기화', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: navyColor)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -96,13 +130,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton(
-                    // --- [수정됨] onPressed 액션에 네비게이션 로직 추가 ---
-                    onPressed: () {
-                      // TODO: 변경된 설정 값을 저장하는 로직을 여기에 구현합니다.
-
-                      // 저장 로직이 끝난 후, 현재 화면을 닫고 이전 화면(알림센터)으로 돌아갑니다.
-                      Navigator.pop(context);
-                    },
+                    onPressed: _saveSettings,
                     child: const Text('저장', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: navyColor,
@@ -155,7 +183,6 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             onChanged: onChanged,
           ),
         ),
-
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [

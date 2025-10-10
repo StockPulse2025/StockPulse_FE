@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../../widgets/news/filter_bottom_sheet.dart';
 import 'news_detail_screen.dart';
 import '../../widgets/news/news_card.dart';
-import '../../data/dummy_news_data.dart';
 import '../../models/news_model.dart';
+import '../../services/api_service.dart';
 
 class NewsRoomScreen extends StatefulWidget {
   const NewsRoomScreen({super.key});
@@ -15,31 +15,19 @@ class NewsRoomScreen extends StatefulWidget {
 class _NewsRoomScreenState extends State<NewsRoomScreen> {
   int _currentPage = 1;
   final int _totalPages = 25;
-  List<News> _currentNewsList = [];
+  late Future<List<News>> newsFuture;
 
   @override
   void initState() {
     super.initState();
-    _updateNewsListForPage();
+    newsFuture = ApiService().fetchNewsByPage(_currentPage);
   }
 
-  void _updateNewsListForPage() {
-    const int newsCountPerPage = 10;
-    final int startIndex = (_currentPage - 1) * newsCountPerPage;
-    final int endIndex = startIndex + newsCountPerPage;
-
+  Future<void> _goToPage(int page) async {
+    if (page < 1 || page > _totalPages) return;
     setState(() {
-      _currentNewsList = dummyNews.sublist(
-        startIndex.clamp(0, dummyNews.length),
-        endIndex.clamp(0, dummyNews.length),
-      );
-    });
-  }
-
-  void _goToPage(int page) {
-    setState(() {
-      _currentPage = page.clamp(1, _totalPages);
-      _updateNewsListForPage();
+      _currentPage = page;
+      newsFuture = ApiService().fetchNewsByPage(_currentPage);
     });
   }
 
@@ -62,6 +50,25 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
     );
   }
 
+  Future<void> _toggleBookmark(News news) async {
+    setState(() {
+      news.isBookmarked = !news.isBookmarked;
+    });
+
+    try {
+      // 서버에 북마크 상태 변경 전송
+      await ApiService().updateBookmarkStatus(news.newsId, news.isBookmarked);
+    } catch (e) {
+      // 에러 발생 시 상태 원복
+      setState(() {
+        news.isBookmarked = !news.isBookmarked;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("북마크 저장 실패")),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -78,29 +85,54 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
           ),
         ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        itemCount: _currentNewsList.length + 1,
-        itemBuilder: (context, index) {
-          if (_currentNewsList.isEmpty) {
-            return const Center(child: Text("뉴스가 없습니다."));
+      body: FutureBuilder<List<News>>(
+        future: newsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
           }
+          if (snapshot.hasError) {
+            return Center(child: Text('뉴스 로드 실패: ${snapshot.error}'));
+          }
+          final newsList = snapshot.data ?? [];
+          if (newsList.isEmpty) return const Center(child: Text("뉴스가 없습니다."));
 
-          if (index == 0 && _currentPage == 1) {
-            final News firstNews = _currentNewsList[0];
-            return GestureDetector(
-              onTap: () => _navigateToDetail(firstNews),
-              child: _buildFeaturedNewsCard(firstNews),
-            );
-          } else if (index == _currentNewsList.length) {
-            return _buildPagination();
-          } else {
-             final News newsItem = _currentPage == 1 ? _currentNewsList[index] : _currentNewsList[index];
-            return GestureDetector(
-              onTap: () => _navigateToDetail(newsItem),
-              child: NewsCard(news: newsItem),
-            );
-          }
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            itemCount: newsList.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0 && _currentPage == 1) {
+                final News firstNews = newsList[0];
+                return GestureDetector(
+                  onTap: () => _navigateToDetail(firstNews),
+                  child: _buildFeaturedNewsCard(firstNews),
+                );
+              } else if (index == newsList.length) {
+                return _buildPagination();
+              } else {
+                final News newsItem = newsList[index];
+                return GestureDetector(
+                  onTap: () => _navigateToDetail(newsItem),
+                  child: Stack(
+                    children: [
+                      NewsCard(news: newsItem),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: IconButton(
+                          icon: Icon(
+                            newsItem.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                            color: newsItem.isBookmarked ? Colors.yellow : Colors.grey,
+                          ),
+                          onPressed: () => _toggleBookmark(newsItem),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            },
+          );
         },
       ),
     );
@@ -109,7 +141,7 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
   Widget _buildFeaturedNewsCard(News news) {
     const Color positiveColor = Color(0xFFF04E52);
     const Color negativeColor = Color(0xFF3687F6);
-    bool isPriceUp = double.parse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) > 0;
+    bool isPriceUp = (double.tryParse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) ?? 0) > 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16.0),
@@ -120,8 +152,8 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
       child: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset(
-              news.imageUrl,
+            child: Image.network(
+              news.newsImage,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) => Container(
                 color: Colors.grey[300],
@@ -168,10 +200,12 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
               child: IconButton(
                 icon: const Icon(Icons.bookmark_border, color: Colors.white),
                 onPressed: () {
+                  // 북마크 기능 추가 예정
                 },
               ),
             ),
           ),
+
           Positioned(
             bottom: 0,
             left: 0,
@@ -210,12 +244,12 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
                         radius: 10,
                         backgroundColor: Colors.transparent,
                         child: ClipOval(
-                          child: Image.asset(
-                            news.companyLogoUrl,
+                          child: Image.network(
+                            news.companyLogo,
                             width: 20,
                             height: 20,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Text(news.companyName.substring(0, 1)),
+                            errorBuilder: (context, error, stackTrace) => Text(news.companyName.isNotEmpty ? news.companyName.substring(0, 1) : ''),
                           ),
                         ),
                       ),
@@ -235,7 +269,7 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    news.title,
+                    news.newsTitle,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,

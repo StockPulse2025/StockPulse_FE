@@ -17,9 +17,9 @@ class _PollWidgetState extends State<PollWidget> {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(horizontal: 24), // 좌우 여백
+      margin: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFD3D7E0), width: 1.5), // 테두리 색상, 두께
+        border: Border.all(color: const Color(0xFFD3D7E0), width: 1.5),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -30,8 +30,8 @@ class _PollWidgetState extends State<PollWidget> {
           _hasVoted ? _buildPollResults() : _buildPollOptions(),
           const SizedBox(height: 8),
           const Text(
-              '78명 참여',
-              style: TextStyle(fontSize: 12, color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold)
+            '78명 참여',
+            style: TextStyle(fontSize: 12, color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold),
           ),
         ],
       ),
@@ -72,9 +72,11 @@ class _PollWidgetState extends State<PollWidget> {
   }
 
   Widget _buildOptionItem(int index, String title) {
-    bool isSelected = _selectedIndex == index;
+    final bool isSelected = _selectedIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
+      onTap: () => setState(() {
+        if (!_hasVoted) _selectedIndex = index;
+      }),
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -89,7 +91,7 @@ class _PollWidgetState extends State<PollWidget> {
   }
 
   Widget _buildResultItem(int index, String title, double percentage) {
-    bool isMyChoice = _selectedIndex == index;
+    final bool isMyChoice = _selectedIndex == index;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       height: 40,
@@ -110,10 +112,7 @@ class _PollWidgetState extends State<PollWidget> {
                   padding: const EdgeInsets.symmetric(horizontal: 12.0),
                   child: Text(
                     '$title (${(percentage * 100).toStringAsFixed(0)}%)',
-                    style: TextStyle(
-                        color: isMyChoice ? Colors.white : Colors.black,
-                        fontWeight: FontWeight.bold
-                    ),
+                    style: TextStyle(color: isMyChoice ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
                   ),
                 ),
               )

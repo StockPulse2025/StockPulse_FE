@@ -31,17 +31,18 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
 
   @override
   Widget build(BuildContext context) {
+    final logoPath = widget.logoPath.isNotEmpty ? widget.logoPath : 'https://via.placeholder.com/40';
     final bool isUp = !widget.change.startsWith('-');
-    return Padding(
 
+    return Padding(
       padding: widget.contentPadding ?? const EdgeInsets.symmetric(vertical: 12.0),
       child: Row(
         children: [
           Text(widget.rank, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(width: 16),
           ClipOval(
-            child: Image.asset(
-              widget.logoPath,
+            child: Image.network(
+              logoPath,
               width: 40,
               height: 40,
               fit: BoxFit.cover,
@@ -56,7 +57,7 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    Text(widget.price, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF585858))),
+                    Text(widget.price, style: const TextStyle(color: Color(0xFF585858), fontSize: 14, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 8),
                     Text(widget.change, style: TextStyle(color: isUp ? positiveColor : negativeColor, fontSize: 14, fontWeight: FontWeight.bold)),
                   ],
@@ -65,13 +66,13 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
             ),
           ),
           IconButton(
-            icon: Icon(Icons.credit_card, color: _isHolding ? const Color(0xFF2B3A66) : const Color(0xFFACB0BF)),
+            icon: Icon(Icons.credit_card, color: _isHolding ? const Color(0xFF2B3A66) : const Color(0xFFACB4B0)),
             onPressed: () => setState(() => _isHolding = !_isHolding),
           ),
           IconButton(
-            icon: Icon(Icons.favorite, color: _isWatching ? const Color(0xFF2B3A66) : const Color(0xFFACB0BF)),
+            icon: Icon(Icons.favorite, color: _isWatching ? const Color(0xFF2B3A66) : const Color(0xFFACB4B0)),
             onPressed: () => setState(() => _isWatching = !_isWatching),
-          ),
+          )
         ],
       ),
     );

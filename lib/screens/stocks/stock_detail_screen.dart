@@ -1,330 +1,206 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:stomp_dart_client/stomp.dart';
+import 'package:stomp_dart_client/stomp_config.dart';
+import 'package:stomp_dart_client/stomp_frame.dart';
+import 'package:http/http.dart' as https;
+import 'dart:convert';
+
 import '../../models/news_model.dart';
 import '../../widgets/news/news_card.dart';
 import '../../widgets/stocks/stock_detail_chart.dart';
-import '../../data/dummy_chart_data.dart';
-import '../../data/dummy_news_data.dart';
 
 class StockDetailScreen extends StatefulWidget {
-  const StockDetailScreen({super.key});
+  final int stockId;  // stockId 필수 인자
 
+  const StockDetailScreen({super.key, required this.stockId});
   @override
   State<StockDetailScreen> createState() => _StockDetailScreenState();
 }
 
 class _StockDetailScreenState extends State<StockDetailScreen> with TickerProviderStateMixin {
   late TabController _tabController;
-  bool _isHolding = true;
-  bool _isWatching = true;
 
-  String _selectedPeriod = '1일';
-  List<Map<String, dynamic>> _allCandleData = [];
-  List<Map<String, dynamic>> _displayCandleData = [];
-  double _candleWidth = 8.0;
-  double _xAxisInterval = 5.0; // x축 레이블 간격
-  double _chartViewportWidth = 0.0; // 차트 뷰포트 너비
+  String stockName = '';
+  String stockSymbol = '';
+  String stockImageUrl = '';
+  int currentPrice = 0;
+  double changeRate = 0.0;
+  double changeAmount = 0.0;
 
-  List<News> _selectedNews = [];
-  DateTime? _selectedDate;
+  List<Map<String, dynamic>> candleData = [];
+  List<Map<String, dynamic>> displayCandleData = [];
+  double candleWidth = 8.0;
+  double xAxisInterval = 5.0;
+  double chartViewportWidth = 0.0;
 
-  late List<News> _realtimeNews;
+  List newsList = [];
+
+  StompClient? stompClient;
 
   final ScrollController _chartScrollController = ScrollController();
+
+  String selectedPeriod = '1일';
+
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadInitialData();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToEnd();
-    });
+    fetchInitialStockData(); // 초기 데이터 REST API로 불러오기
   }
 
-  void _scrollToEnd() {
+  // 초기 주식 상세 데이터 요청
+  Future<void> fetchInitialStockData() async {
+    try {
+      final response = await https.get(
+        Uri.parse('https://stockpulse.p-e.kr/api/v1/stocks/${widget.stockId}/detail'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final result = data['result'];
+        setState(() {
+          stockName = result['name'];      // 주식 이름 저장
+          stockSymbol = result['symbol'];  // 주식 심볼 저장
+          stockImageUrl = result['imageUrl'];  // 주식 이미지 URL 저장
+          currentPrice = (result['currentPrice'] ?? 0).toInt();
+          changeRate = (result['changeRate'] ?? 0).toDouble();
+          changeAmount = (result['changeAmount'] ?? 0).toDouble();
+
+          candleData = generateCandleData(result['candles']);  // 차트 데이터 가공
+          filterCandleData(selectedPeriod);                     // 화면 표시용 차트 데이터 필터링
+
+          newsList = result['news'] ?? [];  // 뉴스 리스트 저장
+
+          isLoading = false;  // 데이터 로드 완료 상태로 변경
+        });
+        setupWebSocket();  // WebSocket 연결 시작
+      } else {
+        throw Exception('주식 상세 정보 로드 실패');
+      }
+    } catch (e) {
+      setState(() => isLoading = false);
+      print('주식 상세 정보 요청 중 오류 발생: $e');
+    }
+  }
+
+  // API에서 받은 차트 데이터 포맷 변환 (필요에 따라 구현)
+  List<Map<String, dynamic>> generateCandleData(dynamic rawData) {
+    if (rawData is List) {
+      return rawData.cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
+
+  // 선택된 기간에 따라 차트 데이터 필터링 및 화면 설정
+  void filterCandleData(String period) {
+    setState(() {
+      selectedPeriod = period;
+      // 간단한 예시로 전체 차트 데이터 그대로 표시
+      displayCandleData = candleData;
+      candleWidth = period == '1일' ? 30 : period == '1주' ? 40 : 50;
+      xAxisInterval = period == '1일' ? 3 : period == '1주' ? 2 : 1;
+      chartViewportWidth = candleWidth * displayCandleData.length;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => scrollToEnd());  // 로딩 후 차트 슬라이더 끝으로 이동
+  }
+
+  // 차트 스크롤 컨트롤러로 끝까지 스크롤 이동
+  void scrollToEnd() {
     if (_chartScrollController.hasClients) {
       _chartScrollController.jumpTo(_chartScrollController.position.maxScrollExtent);
     }
   }
 
-  void _loadInitialData() {
-    _allCandleData = generateSamsungCandleData();
-    _realtimeNews = dummyNews.where((news) => news.companyName == '삼성전자').toList();
-    _filterChartData('1일');
+  // WebSocket STOMP 연결 설정 및 구독 시작
+  void setupWebSocket() {
+    stompClient = StompClient(
+      config: StompConfig(
+        url: 'ws://your-backend-domain/ws-stock',
+        onConnect: (frame) {
+          // WebSocket 연결 성공 시 해당 주식 심볼 구독
+          stompClient!.subscribe(
+            destination: '/sub/$stockSymbol',
+            callback: (frame) {
+              final data = jsonDecode(frame.body!);
+              setState(() {
+                currentPrice = (data['currentPrice'] ?? currentPrice).toInt();
+                changeRate = (data['changeRate'] ?? changeRate).toDouble();
+                changeAmount = (data['changeAmount'] ?? changeAmount).toDouble();
+              });
+            },
+          );
+        },
+        onWebSocketError: (error) => print('웹소켓 오류 발생: $error'),
+        onDisconnect: (frame) => print('웹소켓 연결 종료'),
+      ),
+    );
+    stompClient!.activate();  // 웹소켓 활성화
   }
-
-  void _filterChartData(String period) {
-    setState(() {
-      _selectedPeriod = period;
-
-      if (period == '1일') {
-        _displayCandleData = _allCandleData;
-        _candleWidth = 30.0;
-        _xAxisInterval = 3.0;
-      } else if (period == '1주') {
-        _displayCandleData = _aggregateData(_allCandleData, 7);
-        _candleWidth = 40.0;
-        _xAxisInterval = 2.0;
-      } else {
-        _displayCandleData = _aggregateData(_allCandleData, 30);
-        _candleWidth = 50.0;
-        _xAxisInterval = 1.0;
-      }
-
-      _chartViewportWidth = (_candleWidth + (_candleWidth * 0.5)) * _displayCandleData.length + 20.0;
-
-      _selectedDate = null;
-      _selectedNews = [];
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToEnd();
-    });
-  }
-
-  List<Map<String, dynamic>> _aggregateData(List<Map<String, dynamic>> dailyData, int interval) {
-    List<Map<String, dynamic>> aggregatedData = [];
-    for (int i = 0; i < dailyData.length; i += interval) {
-      int end = (i + interval > dailyData.length) ? dailyData.length : i + interval;
-      List<Map<String, dynamic>> chunk = dailyData.sublist(i, end);
-      if (chunk.isEmpty) continue;
-
-      double open = chunk.first['open'];
-      double close = chunk.last['close'];
-      double high = chunk.map((d) => d['high'] as double).reduce((a, b) => a > b ? a : b);
-      double low = chunk.map((d) => d['low'] as double).reduce((a, b) => a < b ? a : b);
-      DateTime date = chunk.last['date'];
-
-      aggregatedData.add({'date': date, 'high': high, 'low': low, 'open': open, 'close': close});
-    }
-    return aggregatedData;
-  }
-
-  void _handleCandleTap(DateTime date) {
-    setState(() {
-      _selectedDate = date;
-      if (_selectedPeriod != '1일') {
-        int days = (_selectedPeriod == '1주') ? 7 : 30;
-        DateTime startDate = date.subtract(Duration(days: days - 1));
-        _selectedNews = getNewsForPeriod(startDate, date);
-      } else {
-        _selectedNews = getNewsForDate(date);
-      }
-    });
-  }
-
-  final Color navyColor = const Color(0xFF2B3A66);
-  final Color positiveColor = const Color(0xFFFF0000);
-  final Color negativeColor = const Color(0xFF0042FF);
 
   @override
   void dispose() {
-    _tabController.dispose();
+    stompClient?.deactivate();  // 웹소켓 비활성화
     _chartScrollController.dispose();
+    _tabController.dispose();
     super.dispose();
+  }
+
+  // 숫자 천 단위 콤마 표시
+  String formatPrice(int price) {
+    return price.toString().replaceAllMapped(RegExp(r"(\d)(?=(\d{3})+(?!\d))"), (match) => "${match[1]},");
   }
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: Text(stockName),
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: _buildHeader(),
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                if (stockImageUrl.isNotEmpty)
+                  Image.network(stockImageUrl, width: 60, height: 60),
+                Text('$stockName ($stockSymbol)', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text('${formatPrice(currentPrice)}원', style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold)),
+                Text('${changeRate.toStringAsFixed(2)} %', style: TextStyle(fontSize: 16, color: changeRate >= 0 ? Colors.red : Colors.blue)),
+              ],
+            ),
           ),
-          const SizedBox(height: 15),
-          Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
-                child: Divider(height: 1, thickness: 2, color: Color(0xFFE8EBF2)),
-              ),
-              TabBar(
-                controller: _tabController,
-                labelColor: navyColor,
-                unselectedLabelColor: Colors.grey,
-                labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                indicatorColor: navyColor,
-                indicatorWeight: 3.0,
-                indicatorSize: TabBarIndicatorSize.label,
-                dividerColor: Colors.transparent,
-                tabs: const [Tab(text: '      차트      '), Tab(text: '    실시간 뉴스    ')],
-              ),
-            ],
+          TabBar(
+            controller: _tabController,
+            tabs: const [Tab(text: '차트'), Tab(text: '실시간 뉴스')],
           ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildChartTab(),
-                _buildRealtimeNewsTab(),
+                StockDetailChart(
+                  candleData: displayCandleData,
+                  onTap: (date) => print('선택된 날짜: $date'),
+                  candleWidth: candleWidth,
+                  xAxisInterval: xAxisInterval,
+                  selectedPeriod: selectedPeriod,
+                ),
+                ListView.builder(
+                  itemCount: newsList.length,
+                  itemBuilder: (context, index) {
+                    return NewsCard(news: News.fromJson(newsList[index]));
+                  },
+                )
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const CircleAvatar(radius: 20, backgroundImage: AssetImage('assets/images/stock_logo/stock_logo_7.png')),
-            const SizedBox(width: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: const [
-                Text('삼성전자', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                SizedBox(width: 4),
-                Text(' KOSPI 005930', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const Spacer(),
-            IconButton(
-              iconSize: 30,
-              icon: Icon(Icons.credit_card, color: _isHolding ? navyColor : Colors.grey[300]),
-              onPressed: () => setState(() => _isHolding = !_isHolding),
-            ),
-            IconButton(
-              iconSize: 30,
-              icon: Icon(Icons.favorite, color: _isWatching ? navyColor : Colors.grey[300]),
-              onPressed: () => setState(() => _isWatching = !_isWatching),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        const Text('70,500원', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-        Row(
-          children: [
-            const Text('어제보다 ', style: TextStyle(fontSize: 16, color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold)),
-            Text('+200원 (0.2%)', style: TextStyle(fontSize: 16, color: positiveColor, fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildChartTab() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 16),
-                _buildPeriodFilter(),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            controller: _chartScrollController,
-            child: SizedBox(
-              width: _chartViewportWidth,
-              child: StockDetailChart(
-                candleData: _displayCandleData,
-                onCandleTap: _handleCandleTap,
-                candleWidth: _candleWidth,
-                xAxisInterval: _xAxisInterval,
-                selectedPeriod: _selectedPeriod,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 20),
-                if (_selectedNews.isNotEmpty)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                          '${DateFormat('M월 d일').format(_selectedDate!)}  AI 영향도 예측 기반 등락 원인 뉴스',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
-                      ),
-                      const SizedBox(height: 8),
-                      ListView.builder(
-                        itemCount: _selectedNews.length,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemBuilder: (context, index) {
-                          return NewsCard(
-                            news: _selectedNews[index],
-                            margin: const EdgeInsets.symmetric(vertical: 8.0),
-                          );
-                        },
-                      )
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPeriodFilter() {
-    return Row(
-      children: [
-        _buildPeriodButton('1일', _selectedPeriod == '1일'),
-        const SizedBox(width: 8),
-        _buildPeriodButton('1주', _selectedPeriod == '1주'),
-        const SizedBox(width: 8),
-        _buildPeriodButton('1개월', _selectedPeriod == '1개월'),
-      ],
-    );
-  }
-
-  Widget _buildPeriodButton(String period, bool isSelected) {
-    return GestureDetector(
-      onTap: () => _filterChartData(period),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFD1D8EB) : const Color(0xFFEEF0F6),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(period, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  Widget _buildRealtimeNewsTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      itemCount: _realtimeNews.length,
-      itemBuilder: (context, index) {
-        final News newsItem = _realtimeNews[index];
-        // 재귀 호출 대신 print문으로 임시 처리
-        return GestureDetector(
-            onTap: () => print("뉴스 상세 보기: ${newsItem.title}"),
-            child: NewsCard(news: newsItem)
-        );
-      },
     );
   }
 }

@@ -22,30 +22,25 @@ class MyStockListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color positiveColor = Color(0xFFFF0000);
-    const Color negativeColor = const Color(0xFF0042FF);
-    const Color navyColor = Color(0xFF2B3A66);
-
+    final safeLogoPath = logoPath.isNotEmpty ? logoPath : 'https://via.placeholder.com/40';
     final bool isPriceUp = !change.startsWith('-');
     final bool isPredictionPositive = !prediction.startsWith('-');
 
-    final String icon = isPredictionPositive ? '📈' : '📉';
-    final String firstWord = isPredictionPositive ? '최대 ' : '최소 ';
-    final String lastPhrase = isPredictionPositive ? ' 상승 예측' : ' 하락 예측';
+    final icon = isPredictionPositive ? '📈' : '📉';
+    final firstWord = isPredictionPositive ? '최대 ' : '최소 ';
+    final lastPhrase = isPredictionPositive ? ' 상승 예측' : ' 하락 예측';
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 12.0), // 내부 상하좌우 여백
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(12.0),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          Text(rank, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(width: 8),
           ClipOval(
-            child: Image.asset(
-              logoPath,
+            child: Image.network(
+              safeLogoPath,
               width: 40,
               height: 40,
               fit: BoxFit.cover,
@@ -56,14 +51,13 @@ class MyStockListItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    Text(price, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF585858))),
+                    Text(price, style: const TextStyle(color: Color(0xFF585858), fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(width: 8),
-                    Text(change, style: TextStyle(color: isPriceUp ? positiveColor : negativeColor, fontSize: 12)),
+                    Text(change, style: TextStyle(color: isPriceUp ? Colors.red : Colors.blue, fontSize: 12)),
                   ],
                 ),
               ],
@@ -71,21 +65,11 @@ class MyStockListItem extends StatelessWidget {
           ),
           RichText(
             text: TextSpan(
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                color: Colors.black,
-                fontFamily: 'Pretendard',
-              ),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black, fontFamily: 'Pretendard'),
               children: [
                 TextSpan(text: icon),
                 TextSpan(text: firstWord),
-                TextSpan(
-                  text: prediction,
-                  style: TextStyle(
-                    color: isPredictionPositive ? positiveColor : negativeColor,
-                  ),
-                ),
+                TextSpan(text: prediction, style: TextStyle(color: isPredictionPositive ? Colors.red : Colors.blue)),
                 TextSpan(text: lastPhrase),
               ],
             ),
@@ -94,18 +78,18 @@ class MyStockListItem extends StatelessWidget {
           Stack(
             alignment: Alignment.topRight,
             children: [
-              Icon(Icons.article_outlined, color: navyColor, size: 28),
+              const Icon(Icons.article_outlined, size: 28, color: Colors.black),
               if (newsCount > 0)
                 Container(
                   padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(8)),
                   constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                   child: Text(
-                    '$newsCount',
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    newsCount.toString(),
+                    style: const TextStyle(color: Colors.white, fontSize: 10),
                     textAlign: TextAlign.center,
                   ),
-                ),
+                )
             ],
           ),
         ],

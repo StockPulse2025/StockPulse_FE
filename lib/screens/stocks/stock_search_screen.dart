@@ -1,17 +1,52 @@
 import 'package:flutter/material.dart';
+import '../../models/stock_model.dart';
+import '../../services/api_service.dart';
+import 'stock_detail_screen.dart';
 
 class StockSearchScreen extends StatefulWidget {
   const StockSearchScreen({super.key});
-
   @override
   State<StockSearchScreen> createState() => _StockSearchScreenState();
 }
 
 class _StockSearchScreenState extends State<StockSearchScreen> {
   final TextEditingController _searchController = TextEditingController();
-  bool _hasSearched = false;
-  // TODO: 실제 검색 결과로 교체될 예시 데이터
-  final List<String> _searchResults = ['삼성전자', '삼성바이오로직스'];
+  List<Stock> _searchResults = [];
+  bool _isLoading = false;
+  bool _noResults = false;
+
+  final ApiService apiService = ApiService();
+
+  Future<void> _performSearch(String keyword) async {
+    if (keyword.isEmpty) {
+      setState(() {
+        _searchResults.clear();
+        _noResults = false;
+      });
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _noResults = false;
+    });
+    try {
+      final results = await apiService.searchStocks(keyword);
+      setState(() {
+        _searchResults = results;
+        _noResults = results.isEmpty;
+      });
+    } catch (e) {
+      // 오류 처리 필요
+      setState(() {
+        _searchResults.clear();
+        _noResults = true;
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,39 +55,44 @@ class _StockSearchScreenState extends State<StockSearchScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFFF9FAFB),
         surfaceTintColor: const Color(0xFFF9FAFB),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios), onPressed: () => Navigator.of(context).pop()),
         title: TextField(
           controller: _searchController,
           autofocus: true,
           decoration: const InputDecoration(hintText: '종목명 검색', border: InputBorder.none),
-          onSubmitted: (value) => setState(() => _hasSearched = true),
+          onSubmitted: (value) => _performSearch(value.trim()),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-        child: _hasSearched
-            ? (_searchResults.isNotEmpty
-            ? ListView.builder(
-          itemCount: _searchResults.length,
-          itemBuilder: (context, index) {
-            return ListTile(
-              leading: const CircleAvatar(
-                backgroundImage: AssetImage('assets/images/stock_logo/stock_logo_7.png'),
-                backgroundColor: Colors.transparent,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _noResults
+          ? const Center(child: Text('검색 결과가 없습니다'))
+          : ListView.builder(
+        itemCount: _searchResults.length,
+        itemBuilder: (context, index) {
+          final stock = _searchResults[index];
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundImage: NetworkImage(stock.imageUrl ?? 'https://default-image-url.com/default.png'
               ),
-              title: Text(_searchResults[index]),
-              onTap: () {
-                // TODO: 해당 종목 상세 페이지로 이동하는 로직 추가
-              },
-            );
-          },
-        )
-            : const Center(child: Text('해당하는 주식이 없습니다.')))
-            : const Center(child: Text('최근 검색 내역이 없습니다.')),
-      ),
+            ),
+            title: Text(stock.name),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StockDetailScreen(stockId: stock.stockId),
+                ),
+              );
+            },
+          );
+        },
+      )
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 }

@@ -1,18 +1,33 @@
 import 'package:flutter/material.dart';
 import '../../widgets/news/news_card.dart';
 import 'news_detail_screen.dart';
-import '../../data/dummy_news_data.dart'; // 더미 데이터 임포트
-import '../../models/news_model.dart'; // News 모델 임포트
+import '../../models/news_model.dart';
+import '../../services/api_service.dart';
 
-class NewsScrapScreen extends StatelessWidget {
+class NewsScrapScreen extends StatefulWidget {
   const NewsScrapScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // 더미 뉴스 데이터에서 isBookmarkedInitially가 true인 뉴스만 필터링합니다.
-    // 실제 앱에서는 사용자가 스크랩한 뉴스 목록을 서버에서 가져오거나 로컬 저장소에서 관리할 것입니다.
-    final List<News> bookmarkedNews = dummyNews.where((news) => news.isBookmarkedInitially).toList();
+  _NewsScrapScreenState createState() => _NewsScrapScreenState();
+}
 
+class _NewsScrapScreenState extends State<NewsScrapScreen> {
+  late Future<List<News>> bookmarkedNewsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    bookmarkedNewsFuture = ApiService().fetchBookmarkedNewsList();
+  }
+
+  void _navigateToDetail(News news) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => NewsDetailScreen(news: news)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -25,26 +40,33 @@ class NewsScrapScreen extends StatelessWidget {
         titleSpacing: 0,
         centerTitle: false,
         title: const Text(
-            '뉴스 스크랩',
-            style: TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold
-            )
+          '뉴스 스크랩',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
       ),
-      body: bookmarkedNews.isEmpty
-          ? const Center(child: Text('스크랩한 뉴스가 없습니다.')) // 스크랩된 뉴스가 없을 경우
-          : ListView.builder(
-        itemCount: bookmarkedNews.length, // 필터링된 뉴스 개수만큼
-        itemBuilder: (context, index) {
-          final News newsItem = bookmarkedNews[index];
-          return GestureDetector(
-            onTap: () {
-              // NewsDetailScreen으로 이동할 때 해당 뉴스 객체를 전달합니다.
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => NewsDetailScreen(news: newsItem)));
+      body: FutureBuilder<List<News>>(
+        future: bookmarkedNewsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('스크랩 뉴스 로드 실패: ${snapshot.error}'));
+          }
+          final bookmarkedNews = snapshot.data ?? [];
+          if (bookmarkedNews.isEmpty) {
+            return const Center(child: Text('스크랩한 뉴스가 없습니다.'));
+          }
+
+          return ListView.builder(
+            itemCount: bookmarkedNews.length,
+            itemBuilder: (context, index) {
+              final newsItem = bookmarkedNews[index];
+              return GestureDetector(
+                onTap: () => _navigateToDetail(newsItem),
+                child: NewsCard(news: newsItem),
+              );
             },
-            // NewsCard에 실제 뉴스 데이터를 전달하고, isBookmarkedInitially는 newsItem의 값을 따릅니다.
-            child: NewsCard(news: newsItem),
           );
         },
       ),

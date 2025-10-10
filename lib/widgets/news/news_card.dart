@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/news_model.dart';
+import '../../services/api_service.dart';
 
 class NewsCard extends StatefulWidget {
   final News news;
@@ -21,17 +22,31 @@ class _NewsCardState extends State<NewsCard> {
   @override
   void initState() {
     super.initState();
-    _isBookmarked = widget.news.isBookmarkedInitially;
+    _isBookmarked = widget.news.isBookmarked;
+  }
+
+  Future<void> _toggleBookmark() async {
+    setState(() {
+      _isBookmarked = !_isBookmarked;
+      widget.news.isBookmarked = _isBookmarked;
+    });
+    try {
+      await ApiService().updateBookmarkStatus(widget.news.newsId, _isBookmarked);
+    } catch (e) {
+      setState(() {
+        _isBookmarked = !_isBookmarked;
+        widget.news.isBookmarked = _isBookmarked;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('북마크 저장 실패')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final news = widget.news;
-
     const Color positiveColor = Color(0xFFF04E52);
     const Color negativeColor = Color(0xFF3687F6);
-
-    bool isPriceUp = double.parse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) > 0; // 숫자만 추출하여 파싱
+    bool isPriceUp = (double.tryParse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) ?? 0) > 0;
 
     return Stack(
       children: [
@@ -52,11 +67,14 @@ class _NewsCardState extends State<NewsCard> {
                   width: 100,
                   height: 100,
                   color: Colors.grey[200],
-                  child: Image.asset(
-                    news.imageUrl,
+                  child: news.newsImage.isNotEmpty
+                      ? Image.network(
+                    news.newsImage,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, size: 40, color: Colors.grey)), // 에러 시 대체 아이콘
-                  ),
+                    errorBuilder: (context, error, stackTrace) =>
+                    const Center(child: Icon(Icons.broken_image, size: 40, color: Colors.grey)),
+                  )
+                      : const Center(child: Icon(Icons.broken_image, size: 40, color: Colors.grey)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -84,18 +102,20 @@ class _NewsCardState extends State<NewsCard> {
                             ),
                           ),
                           const SizedBox(width: 8),
-
                           CircleAvatar(
                             radius: 10,
                             backgroundColor: Colors.transparent,
                             child: ClipOval(
-                              child: Image.asset(
-                                news.companyLogoUrl,
+                              child: news.companyLogo.isNotEmpty
+                                  ? Image.network(
+                                news.companyLogo,
                                 width: 20,
                                 height: 20,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Text(news.companyName.substring(0, 1)),
-                              ),
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Text(news.companyName.substring(0, 1)),
+                              )
+                                  : const SizedBox.shrink(),
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -114,7 +134,7 @@ class _NewsCardState extends State<NewsCard> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        news.title,
+                        news.newsTitle,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -129,7 +149,6 @@ class _NewsCardState extends State<NewsCard> {
             ],
           ),
         ),
-
         Positioned(
           top: 8,
           right: 16,
@@ -141,14 +160,9 @@ class _NewsCardState extends State<NewsCard> {
                 color: _isBookmarked ? const Color(0xFF2B3A66) : Colors.grey,
                 size: 24
             ),
-            onPressed: () {
-              setState(() {
-                _isBookmarked = !_isBookmarked;
-              });
-            },
+            onPressed: _toggleBookmark,
           ),
         ),
-
         Positioned(
           bottom: 24,
           right: 32,
@@ -162,15 +176,10 @@ class _NewsCardState extends State<NewsCard> {
               text: TextSpan(
                 style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Pretendard'),
                 children: [
-                  const TextSpan(
-                    text: '예측주가 ',
-                    style: TextStyle(color: Colors.black),
-                  ),
+                  const TextSpan(text: '예측주가 ', style: TextStyle(color: Colors.black)),
                   TextSpan(
                     text: news.prediction,
-                    style: TextStyle(
-                      color: news.isPredictionPositive ? const Color(0xFFFF0000) : const Color(0xFF0042FF),
-                    ),
+                    style: TextStyle(color: news.isPredictionPositive ? const Color(0xFFFF0000) : const Color(0xFF0042FF)),
                   ),
                 ],
               ),

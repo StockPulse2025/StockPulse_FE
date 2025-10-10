@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/api_service.dart';
 
 class FilterBottomSheet extends StatefulWidget {
   const FilterBottomSheet({super.key});
@@ -105,7 +106,17 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {},
+                      onPressed: () async {
+                        await ApiService().saveFilterSettings(
+                            sortOrder: _sortOrder,
+                            stockFilter: _stockFilter,
+                            selectedIndustries: _selectedIndustries.toList(),
+                            neutral: _neutralFilter,
+                            good: _goodNewsFilter, goodRange: _goodNewsRange,
+                            bad: _badNewsFilter, badRange: _badNewsRange
+                        );
+                        Navigator.pop(context);
+                      },
                       child: const Text('저장', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: navyColor,

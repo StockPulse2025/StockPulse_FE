@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import '../../models/news_model.dart';
 
 class HomeNewsSection extends StatelessWidget {
-  const HomeNewsSection({super.key});
+  final List<News> newsList;
+
+  const HomeNewsSection({required this.newsList, Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    if (newsList.isEmpty) {
+      return const Center(child: Text('뉴스 데이터가 없습니다.'));
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: const Text(
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20.0),
+          child: Text(
             '내 종목 최신 뉴스 📢',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
@@ -18,49 +24,24 @@ class HomeNewsSection extends StatelessWidget {
         const SizedBox(height: 16),
         SizedBox(
           height: 225,
-          child: ListView(
+          child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            children: [
-              _buildNewsCard(
-                context,
-                'assets/images/news_logo/news_logo_1.jpg',
-                '한화 필리조선소 찾은 李대통령... 조선주 "들썩"',
-                '한화오션',
-                '호재',
-                '+3.1%',
-                'assets/images/stock_logo/stock_logo_5.png',
-              ),
-              const SizedBox(width: 16),
-              _buildNewsCard(
-                context,
-                'assets/images/news_logo/news_logo_3.jpg',
-                '한미 회담 분위기 좋길래 주식 샀더니... 노란봉투법에 "발목"',
-                '한화오션',
-                '악재',
-                '+3.1%',
-                'assets/images/stock_logo/stock_logo_5.png',
-              ),
-              const SizedBox(width: 16),
-              _buildNewsCard(
-                context,
-                'assets/images/news_logo/news_logo_5.jpg',
-                '시총 9조 대한항공, 70조 대미투자... 초대형 항공사 목표?',
-                '대한항공',
-                '호재',
-                '+1.2%',
-                'assets/images/stock_logo/stock_logo_2.png',
-              ),
-            ],
+            itemCount: newsList.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 16),
+            itemBuilder: (context, index) {
+              final news = newsList[index];
+              return _buildNewsCard(context, news);
+            },
           ),
         )
       ],
     );
   }
 
-  Widget _buildNewsCard(BuildContext context, String newsImagePath, String title, String stockName, String tag, String prediction, String stockLogoPath) {
-    final bool isPredictionPositive = prediction.startsWith('+');
-    final bool isGoodNews = tag == '호재';
+  Widget _buildNewsCard(BuildContext context, News news) {
+    final bool isPredictionPositive = news.isPredictionPositive;
+    final bool isGoodNews = news.isGoodNews;
 
     return Container(
       width: 170,
@@ -81,12 +62,11 @@ class HomeNewsSection extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8.0),
                   image: DecorationImage(
-                    image: AssetImage(newsImagePath),
+                    image: NetworkImage(news.newsImage),
                     fit: BoxFit.cover,
                   ),
                 ),
               ),
-
               Positioned(
                 top: 0,
                 left: 0,
@@ -100,15 +80,10 @@ class HomeNewsSection extends StatelessWidget {
                     text: TextSpan(
                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                       children: [
-                        const TextSpan(
-                          text: '예측주가 ',
-                          style: TextStyle(color: Colors.black),
-                        ),
+                        const TextSpan(text: '예측주가 ', style: TextStyle(color: Colors.black)),
                         TextSpan(
-                          text: prediction,
-                          style: TextStyle(
-                            color: isPredictionPositive ? const Color(0xFFFF0000) : const Color(0xFF0042FF),
-                          ),
+                          text: isPredictionPositive ? '+' : '-',
+                          style: TextStyle(color: isPredictionPositive ? const Color(0xFFFF0000) : const Color(0xFF0042FF)),
                         ),
                       ],
                     ),
@@ -118,15 +93,13 @@ class HomeNewsSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-
           Text(
-              title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)
+            news.newsTitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 15),
-
           Row(
             children: [
               Container(
@@ -136,22 +109,22 @@ class HomeNewsSection extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  isGoodNews ? '📈$tag' : '📉$tag',
+                  (isGoodNews ? '📈호재' : '📉악재'),
                   style: const TextStyle(
-                      color: Color(0xFF7C7C7C),
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold
+                    color: Color(0xFF7C7C7C),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
               CircleAvatar(
                 radius: 10,
-                backgroundImage: AssetImage(stockLogoPath),
+                backgroundImage: NetworkImage(news.companyLogo),
                 backgroundColor: Colors.transparent,
               ),
               const SizedBox(width: 4),
-              Text(stockName, style: const TextStyle(fontSize: 12)),
+              Text(news.companyName, style: const TextStyle(fontSize: 12)),
             ],
           ),
         ],

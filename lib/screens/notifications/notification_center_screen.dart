@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'notification_settings_screen.dart';
 import '../../widgets/notifications/notification_card.dart';
+import '../../models/notification_model.dart';
+import '../../services/api_service.dart';
 
 class NotificationCenterScreen extends StatefulWidget {
   const NotificationCenterScreen({super.key});
@@ -13,10 +15,37 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> wit
   late TabController _tabController;
   final Color navyColor = const Color(0xFF2B3A66);
 
+  List<NotificationModel> holdingsNotifications = [];
+  List<NotificationModel> watchlistNotifications = [];
+
+  final ApiService apiService = ApiService();
+
+  bool isLoadingHoldings = true;
+  bool isLoadingWatchlist = true;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    try {
+      final holdings = await apiService.fetchHoldingsNotifications();
+      final watchlist = await apiService.fetchWatchlistNotifications();
+      setState(() {
+        holdingsNotifications = holdings;
+        watchlistNotifications = watchlist;
+        isLoadingHoldings = false;
+        isLoadingWatchlist = false;
+      });
+    } catch (_) {
+      setState(() {
+        isLoadingHoldings = false;
+        isLoadingWatchlist = false;
+      });
+    }
   }
 
   @override
@@ -66,8 +95,12 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> wit
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildNotificationList(isHoldings: true),
-                _buildNotificationList(isHoldings: false),
+                isLoadingHoldings
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildNotificationList(holdingsNotifications),
+                isLoadingWatchlist
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildNotificationList(watchlistNotifications),
               ],
             ),
           ),
@@ -76,113 +109,21 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> wit
     );
   }
 
-
-  Widget _buildNotificationList({required bool isHoldings}) {
-    final List<Map<String, String>> holdingsNotifications = [
-      {'stockName': '한화오션',
-        'impact': '+2.2%',
-        'newsTitle': "한화 필리조선소 찾은 李대통령… 조선주 '들썩'",
-        'newsImagePath': 'assets/images/news_logo/news_logo_1.jpg',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_5.png',
-        'relatedStockName': '한화오션'},
-
-      {'stockName': '삼성전자',
-        'impact': '-0.3%',
-        'newsTitle': "앤비디아 실적 경계감, 코스피 -0.15% 약보합 전환",
-        'newsImagePath': 'assets/images/news_logo/news_logo_2.jpg',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_7.png',
-        'relatedStockName': '삼성전자'},
-
-      {'stockName': '삼성전자',
-        'impact': '+0.1%',
-        'newsTitle': "'200달러 코앞인데' 엔비디아 목표가 155달러?",
-        'newsImagePath': 'assets/images/news_logo/news_logo_6.jpg',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_7.png',
-        'relatedStockName': '삼성전자'},
-
-      {'stockName': '한화오션',
-        'impact': '+0.2%',
-        'newsTitle': "韓조선 원팀 '최대 60조' 캐나다 사업 결선 진출…",
-        'newsImagePath': 'assets/images/news_logo/news_logo_7.png',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_5.png',
-        'relatedStockName': '한화오션'},
-
-      {'stockName': '한화오션',
-        'impact': '+0.9%',
-        'newsTitle': "차익매물 털고 조선주 반등?… 한화오션, 프리…",
-        'newsImagePath': 'assets/images/news_logo/news_logo_9.jpg',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_5.png',
-        'relatedStockName': '한화오션'},
-
-      {'stockName': '한화오션',
-        'impact': '-2.1%',
-        'newsTitle': "한미 회담 분위기 좋길래 주식 샀더니… 노란봉…",
-        'newsImagePath': 'assets/images/news_logo/news_logo_3.jpg',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_5.png',
-        'relatedStockName': '한화오션'},
-    ];
-
-    final List<Map<String, String>> watchlistNotifications = [
-      {'stockName': '한화오션',
-        'impact': '+2.2%',
-        'newsTitle': "한화 필리조선소 찾은 李대통령… 조선주 '들썩'",
-        'newsImagePath': 'assets/images/news_logo/news_logo_1.jpg',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_5.png',
-        'relatedStockName': '한화오션'},
-
-      {'stockName': '삼성전자',
-        'impact': '-0.3%',
-        'newsTitle': "앤비디아 실적 경계감, 코스피 -0.15% 약보합 전환",
-        'newsImagePath': 'assets/images/news_logo/news_logo_2.jpg',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_7.png',
-        'relatedStockName': '삼성전자'},
-
-      {'stockName': '삼성전자',
-        'impact': '+0.1%',
-        'newsTitle': "'200달러 코앞인데' 엔비디아 목표가 155달러?",
-        'newsImagePath': 'assets/images/news_logo/news_logo_6.jpg',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_7.png',
-        'relatedStockName': '삼성전자'},
-
-      {'stockName': '한화오션',
-        'impact': '+0.2%',
-        'newsTitle': "韓조선 원팀 '최대 60조' 캐나다 사업 결선 진출…",
-        'newsImagePath': 'assets/images/news_logo/news_logo_7.png',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_5.png',
-        'relatedStockName': '한화오션'},
-
-      {'stockName': '한화오션',
-        'impact': '+0.9%',
-        'newsTitle': "차익매물 털고 조선주 반등?… 한화오션, 프리…",
-        'newsImagePath': 'assets/images/news_logo/news_logo_9.jpg',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_5.png',
-        'relatedStockName': '한화오션'},
-
-      {'stockName': '한화오션',
-        'impact': '-2.1%',
-        'newsTitle': "한미 회담 분위기 좋길래 주식 샀더니… 노란봉…",
-        'newsImagePath': 'assets/images/news_logo/news_logo_3.jpg',
-        'stockLogoPath': 'assets/images/stock_logo/stock_logo_5.png',
-        'relatedStockName': '한화오션'},
-    ];
-
-    final notifications = isHoldings ? holdingsNotifications : watchlistNotifications;
-
+  Widget _buildNotificationList(List<NotificationModel> notifications) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
       itemCount: notifications.length,
       itemBuilder: (context, index) {
         final notif = notifications[index];
         return Padding(
-
-          padding: const EdgeInsets.only(top: 10.0, bottom: 10.0),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           child: NotificationCard(
-            stockName: notif['stockName']!,
-            impact: notif['impact']!,
-            newsTitle: notif['newsTitle']!,
-            newsImagePath: notif['newsImagePath']!,
-            stockLogoPath: notif['stockLogoPath']!,
-            relatedStockName: notif['relatedStockName']!,
+            stockName: notif.stockName,
+            impact: notif.impact,
+            newsTitle: notif.newsTitle,
+            newsImagePath: notif.newsImagePath,
+            stockLogoPath: notif.stockLogoPath,
+            relatedStockName: notif.relatedStockName,
           ),
         );
       },

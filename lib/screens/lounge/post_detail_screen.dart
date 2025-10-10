@@ -1,21 +1,114 @@
 import 'package:flutter/material.dart';
+import '../../models/post_model.dart';
+import '../../models/comment_model.dart';
+import '../../services/api_service.dart';
+import '../../widgets/lounge/comment_widget.dart';
 import '../../widgets/lounge/poll_widget.dart';
 
-class PostDetailScreen extends StatelessWidget {
+class PostDetailScreen extends StatefulWidget {
+  final int postId;
   final bool isPollPost;
-  const PostDetailScreen({super.key, required this.isPollPost});
+
+  const PostDetailScreen({super.key, required this.postId, required this.isPollPost});
+
+  @override
+  State<PostDetailScreen> createState() => _PostDetailScreenState();
+}
+
+class _PostDetailScreenState extends State<PostDetailScreen> {
+  Post? post;
+  List<Comment> comments = [];
+  bool isLoadingPost = true;
+  bool isLoadingComments = true;
+  bool isSubmittingComment = false;
+  final ApiService apiService = ApiService();
+
+  final TextEditingController _commentController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPost();
+    _loadComments();
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadPost() async {
+    try {
+      final fetchedPost = await apiService.fetchPostDetail(widget.postId);
+      setState(() {
+        post = fetchedPost;
+        isLoadingPost = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoadingPost = false;
+      });
+    }
+  }
+
+  Future<void> _loadComments() async {
+    try {
+      final fetchedComments = await apiService.fetchComments(widget.postId);
+      setState(() {
+        comments = fetchedComments;
+        isLoadingComments = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoadingComments = false;
+      });
+    }
+  }
+
+  void _refreshComments() {
+    _loadComments();
+  }
+
+  Future<void> _submitComment() async {
+    final content = _commentController.text.trim();
+    if (content.isEmpty) return;
+
+    setState(() {
+      isSubmittingComment = true;
+    });
+
+    try {
+      final success = await apiService.submitComment(widget.postId, content);
+      if (success) {
+        _commentController.clear();
+        _refreshComments();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('댓글 작성에 실패했습니다.')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('오류: $e')));
+    } finally {
+      setState(() {
+        isSubmittingComment = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (isLoadingPost) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (post == null) {
+      return const Scaffold(body: Center(child: Text('게시글을 불러오지 못했습니다.')));
+    }
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () => Navigator.of(context).pop()),
       ),
       body: Column(
         children: [
@@ -25,43 +118,66 @@ class PostDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: _buildPostHeader(),
-                  ),
+                  Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: _buildPostHeader()),
                   const SizedBox(height: 16),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('조선주 슬슬 반등 시작하나요?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        SizedBox(height: 16),
-                        Text('차익매물 다 털고 다시 올라갈 준비 하는 것 같긴한데 지금 빨리 매수해야할까요? 다른 분들 의견이 궁금합니다.',
-                            style: TextStyle(color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold)),
+                      children: [
+                        Text(post!.postTitle, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 16),
+                        Text(post!.postContent, style: const TextStyle(color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
                   const SizedBox(height: 24),
-                  if (isPollPost) const PollWidget(),
-                  if (isPollPost) const SizedBox(height: 24),
-
-                  _buildDiscussionTopic(),
-
+                  if (widget.isPollPost) const PollWidget(),
+                  if (widget.isPollPost) const SizedBox(height: 24),
+                  _buildDiscussionTopic(post!),
                   const Divider(height: 32),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Row(
-                        children: [
-                          const Icon(Icons.chat_bubble_outline, size: 16, color: Colors.grey),
+                      children: [
+                        const Icon(Icons.chat_bubble_outline, size: 16, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(post!.commentCount.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        if (widget.isPollPost) ...[
+                          const SizedBox(width: 12),
+                          const Icon(Icons.poll_outlined, size: 16, color: Colors.grey),
                           const SizedBox(width: 4),
-                          const Text('33', style: TextStyle(fontWeight: FontWeight.bold)),
-                          if (isPollPost) const SizedBox(width: 12),
-                          if (isPollPost) const Icon(Icons.poll_outlined, size: 16, color: Colors.grey),
-                          if (isPollPost) const SizedBox(width: 4),
-                          if (isPollPost) const Text('78', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ]
+                          Text(post!.pollCount.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        ],
+                      ],
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  isLoadingComments
+                      ? const Center(child: CircularProgressIndicator())
+                      : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: comments.length,
+                    itemBuilder: (context, index) {
+                      final comment = comments[index];
+                      return CommentWidget(
+                        author: comment.author,
+                        content: comment.content,
+                        isMyComment: comment.isMine,
+                        commentId: comment.id,
+                        onEditApi: (id, newContent) async {
+                          bool success = await apiService.editComment(id, newContent);
+                          if (success) _refreshComments();
+                          return success;
+                        },
+                        onDeleteApi: (id) async {
+                          bool success = await apiService.deleteComment(id);
+                          if (success) _refreshComments();
+                          return success;
+                        },
+                      );
+                    },
                   ),
                 ],
               ),
@@ -79,34 +195,29 @@ class PostDetailScreen extends StatelessWidget {
         Container(
           width: 40,
           height: 40,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8EBF2),
-            borderRadius: BorderRadius.circular(4),
-          ),
+          decoration: BoxDecoration(color: const Color(0xFFE8EBF2), borderRadius: BorderRadius.circular(4)),
           child: const Icon(Icons.person, color: Colors.white),
         ),
         const SizedBox(width: 12),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text('KIM', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('25.07.08 | 18:40', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
+          children: [
+            Text(post!.author, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(post!.createdAt.toString(), style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
           ],
         )
       ],
     );
   }
 
-  // --- [수정됨] 토론 주제 위젯 빌더 (디자인 전면 수정) ---
-  Widget _buildDiscussionTopic() {
+  Widget _buildDiscussionTopic(Post post) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('토론 TOPIC💬', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 12),
-          // --- [수정됨] 남색 세로 막대를 추가하는 Row ---
           IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -116,7 +227,6 @@ class PostDetailScreen extends StatelessWidget {
                 Expanded(
                   child: Column(
                     children: [
-                      // 1. 뉴스 정보
                       Container(
                         padding: const EdgeInsets.all(12),
                         color: const Color(0xFFF9FAFB),
@@ -124,13 +234,13 @@ class PostDetailScreen extends StatelessWidget {
                           children: [
                             Image.asset('assets/images/news_logo/news_logo_9.jpg', width: 50, height: 50, fit: BoxFit.cover),
                             const SizedBox(width: 12),
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("차익매물 털고 조선주 반등?...한화오션, 프리마켓서 2%대 강세", style: TextStyle(fontWeight: FontWeight.bold)),
-                                  SizedBox(height: 4),
-                                  Text('25.08.28 | 디지털타임스', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text(post.newsTitle ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 4),
+                                  Text(post.newsSource ?? '', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                                 ],
                               ),
                             ),
@@ -138,20 +248,21 @@ class PostDetailScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      // 2. 주식 정보
                       Container(
-                        padding: const EdgeInsets.all(12.0),
+                        padding: const EdgeInsets.all(12),
                         color: const Color(0xFFF9FAFB),
                         child: Row(
                           children: [
                             const CircleAvatar(backgroundImage: AssetImage('assets/images/stock_logo/stock_logo_5.png')),
                             const SizedBox(width: 12),
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('한화오션', style: TextStyle(fontWeight: FontWeight.bold)),
-                                  Row(children: [Text('11,200원'), SizedBox(width: 8), Text('+2.2%', style: TextStyle(color: Colors.red))])
+                                  Text(post.stockName ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Row(
+                                    children: [Text(post.stockPrice?.toString() ?? ''), const SizedBox(width: 8), const Text('+2.2%', style: TextStyle(color: Colors.red))],
+                                  )
                                 ],
                               ),
                             ),
@@ -169,52 +280,37 @@ class PostDetailScreen extends StatelessWidget {
     );
   }
 
-  // --- [수정됨] 하단 댓글 입력창 위젯 ---
   Widget _buildCommentInput() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 5,
-            offset: const Offset(0, -2),
-          )
-        ],
-      ),
+      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5, offset: const Offset(0, -2))]),
       child: Row(
         children: [
           Expanded(
             child: TextField(
+              controller: _commentController,
               decoration: InputDecoration(
                 hintText: '의견을 남겨주세요.',
-                // --- [수정됨] 힌트 텍스트 스타일 ---
                 hintStyle: const TextStyle(fontWeight: FontWeight.bold),
                 filled: true,
                 fillColor: Colors.grey[200],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide.none,
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               ),
             ),
           ),
           const SizedBox(width: 8),
-          // --- [수정됨] 등록 버튼 스타일 ---
           ElevatedButton(
-            onPressed: () {},
+            onPressed: isSubmittingComment ? null : _submitComment,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2B3A66), // 남색 배경
+              backgroundColor: const Color(0xFF2B3A66),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             ),
-            child: const Text(
+            child: isSubmittingComment
+                ? const CircularProgressIndicator(color: Colors.white)
+                : const Text(
               '등록',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white // 흰색 글씨
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
             ),
           ),
         ],

@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import '../../models/stock_model.dart';
 
 class HomeTop5Section extends StatelessWidget {
-  const HomeTop5Section({super.key});
+  final List<Stock> stockList;
+
+  const HomeTop5Section({required this.stockList, Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    if (stockList.isEmpty) {
+      return const Center(child: Text('주식 데이터가 없습니다.'));
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
@@ -15,11 +22,18 @@ class HomeTop5Section extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          _buildTop5Item('1', '한화오션', '110,400원', '+2.4%', '+3.1%', 7, 'assets/images/stock_logo/stock_logo_5.png'),
-          _buildTop5Item('2', '카카오', '63,800원', '-1.8%', '-2.0%', 2, 'assets/images/stock_logo/stock_logo_12.png'),
-          _buildTop5Item('3', '네이버', '217,500원', '-1.5%', '-1.6%', 1, 'assets/images/stock_logo/stock_logo_18.png'),
-          _buildTop5Item('4', 'SK하이닉스', '257,500원', '-1.5%', '+0.9%', 4, 'assets/images/stock_logo/stock_logo_17.png'),
-          _buildTop5Item('5', '삼성전자', '70,500원', '+0.2%', '+0.1%', 5, 'assets/images/stock_logo/stock_logo_7.png'),
+          ...stockList.map((stock) {
+            return _buildTop5Item(
+              stock.rank.toString(),
+              stock.name,
+              '${stock.currentPrice}원',
+              '${stock.changeAmount >= 0 ? '+' : ''}${stock.changeAmount.toStringAsFixed(2)}%',
+              '${stock.changeRate >= 0 ? '+' : ''}${stock.changeRate.toStringAsFixed(2)}%',
+              0, // newsCount (백엔드에서 주는 경우 연동 가능)
+                stock.imageUrl ?? 'https://default-image-url.com/default.png'
+
+            );
+          }).toList(),
         ],
       ),
     );
@@ -29,7 +43,7 @@ class HomeTop5Section extends StatelessWidget {
     const Color positiveColor = Color(0xFFF04E52);
     const Color negativeColor = Color(0xFF3687F6);
 
-    final bool isPriceUp = !change.startsWith('-');
+    final bool isPriceUp = change.startsWith('+') || !change.startsWith('-');
     final bool isPredictionPositive = predictionPercent.startsWith('+');
 
     final String icon = isPredictionPositive ? '📈' : '📉';
@@ -44,7 +58,7 @@ class HomeTop5Section extends StatelessWidget {
           const SizedBox(width: 16),
           CircleAvatar(
             radius: 18,
-            backgroundImage: AssetImage(imagePath),
+            backgroundImage: NetworkImage(imagePath),
             backgroundColor: Colors.transparent,
           ),
           const SizedBox(width: 12),
@@ -63,7 +77,6 @@ class HomeTop5Section extends StatelessWidget {
               ],
             ),
           ),
-
           SizedBox(
             width: 130,
             child: RichText(
@@ -79,9 +92,7 @@ class HomeTop5Section extends StatelessWidget {
                   TextSpan(text: firstWord),
                   TextSpan(
                     text: predictionPercent,
-                    style: TextStyle(
-                      color: isPredictionPositive ? positiveColor : negativeColor,
-                    ),
+                    style: TextStyle(color: isPredictionPositive ? positiveColor : negativeColor),
                   ),
                   TextSpan(text: lastPhrase),
                 ],
