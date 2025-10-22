@@ -1,9 +1,19 @@
 import 'package:flutter/material.dart';
 import 'screens/splash_screen.dart';
-import 'screens/notifications/notification_center_screen.dart';
+import 'package:provider/provider.dart';
+import 'providers/user_provider.dart';
+import 'services/api_service.dart';
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => UserProvider(ApiService())),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {

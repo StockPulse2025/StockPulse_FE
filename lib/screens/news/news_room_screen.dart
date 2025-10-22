@@ -13,26 +13,24 @@ class NewsRoomScreen extends StatefulWidget {
 }
 
 class _NewsRoomScreenState extends State<NewsRoomScreen> {
-  int _currentPage = 1;
-  final int _totalPages = 25;
-  late Future<List<News>> newsFuture;
+  // 메인 뉴스와 뉴스 목록을 별도의 Future로 관리
+  late Future<News> mainNewsFuture;
+  late Future<List<News>> newsListFuture;
 
   @override
   void initState() {
     super.initState();
-    newsFuture = ApiService().fetchNewsByPage(_currentPage);
+    // 두 API를 동시에 호출
+    mainNewsFuture = ApiService().fetchMainNews();
+    newsListFuture = ApiService().fetchNewsWithFilter();
   }
 
-  Future<void> _goToPage(int page) async {
-    if (page < 1 || page > _totalPages) return;
+  // 데이터를 새로고침하는 함수
+  void _refreshNews() {
     setState(() {
-      _currentPage = page;
-      newsFuture = ApiService().fetchNewsByPage(_currentPage);
+      mainNewsFuture = ApiService().fetchMainNews();
+      newsListFuture = ApiService().fetchNewsWithFilter();
     });
-  }
-
-  void _jumpPages(int amount) {
-    _goToPage(_currentPage + amount);
   }
 
   void _showFilter() {
@@ -41,31 +39,53 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => const FilterBottomSheet(),
-    );
+    ).then((filterResult) {
+      // FilterBottomSheet가 닫히면서 필터 값을 전달하면, 해당 값으로 API를 호출
+      if (filterResult != null) {
+        setState(() {
+          // 메인 뉴스는 고정, 목록만 필터링된 결과로 새로고침
+          newsListFuture = ApiService().fetchNewsWithFilter(
+            sort: filterResult['sort'],
+            allStock: filterResult['allStock'],
+            ownedStock: filterResult['ownedStock'],
+            favoriteStock: filterResult['favoriteStock'],
+            industries: filterResult['industries'],
+          );
+        });
+      }
+    });
   }
 
   void _navigateToDetail(News news) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => NewsDetailScreen(news: news)),
+      MaterialPageRoute(
+        builder: (context) => NewsDetailScreen(newsId: news.newsId),
+      ),
     );
   }
 
   Future<void> _toggleBookmark(News news) async {
+    final originalBookmarkStatus = news.isBookmarked; // 에러 발생 시 복구를 위해 원래 상태 저장
+
     setState(() {
       news.isBookmarked = !news.isBookmarked;
     });
 
     try {
-      // 서버에 북마크 상태 변경 전송
-      await ApiService().updateBookmarkStatus(news.newsId, news.isBookmarked);
-    } catch (e) {
-      // 에러 발생 시 상태 원복
+     final newStatus = await ApiService().updateBookmarkStatus(news.newsId);
       setState(() {
-        news.isBookmarked = !news.isBookmarked;
+        news.isBookmarked = newStatus;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("북마크 저장 실패")),
-      );
+    } catch (e) {
+      // 에러 발생 시 상태를 원래대로
+      setState(() {
+        news.isBookmarked = originalBookmarkStatus;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("북마크 상태 변경에 실패했습니다.")),
+        );
+      }
     }
   }
 
@@ -85,52 +105,63 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<News>>(
-        future: newsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      body: FutureBuilder<News>(
+        future: mainNewsFuture,
+        builder: (context, mainNewsSnapshot) {
+          if (mainNewsSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
-            return Center(child: Text('뉴스 로드 실패: ${snapshot.error}'));
+          if (mainNewsSnapshot.hasError) {
+            return Center(child: Text('메인 뉴스 로드 실패: ${mainNewsSnapshot.error}'));
           }
-          final newsList = snapshot.data ?? [];
-          if (newsList.isEmpty) return const Center(child: Text("뉴스가 없습니다."));
+          final mainNews = mainNewsSnapshot.data!;
 
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            itemCount: newsList.length + 1,
-            itemBuilder: (context, index) {
-              if (index == 0 && _currentPage == 1) {
-                final News firstNews = newsList[0];
-                return GestureDetector(
-                  onTap: () => _navigateToDetail(firstNews),
-                  child: _buildFeaturedNewsCard(firstNews),
-                );
-              } else if (index == newsList.length) {
-                return _buildPagination();
-              } else {
-                final News newsItem = newsList[index];
-                return GestureDetector(
-                  onTap: () => _navigateToDetail(newsItem),
-                  child: Stack(
+          return FutureBuilder<List<News>>(
+            future: newsListFuture,
+            builder: (context, newsListSnapshot) {
+              if (newsListSnapshot.connectionState == ConnectionState.waiting) {
+                // 메인 뉴스는 이미 로드, 목록 로딩 중에도 보여줄 수 있음
+                return SingleChildScrollView(
+                  child: Column(
                     children: [
-                      NewsCard(news: newsItem),
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: IconButton(
-                          icon: Icon(
-                            newsItem.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                            color: newsItem.isBookmarked ? Colors.yellow : Colors.grey,
-                          ),
-                          onPressed: () => _toggleBookmark(newsItem),
-                        ),
+                      GestureDetector(
+                        onTap: () => _navigateToDetail(mainNews),
+                        child: _buildFeaturedNewsCard(mainNews),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Center(child: CircularProgressIndicator()),
                       ),
                     ],
                   ),
                 );
               }
+              if (newsListSnapshot.hasError) {
+                return Center(child: Text('뉴스 목록 로드 실패: ${newsListSnapshot.error}'));
+              }
+              final newsList = newsListSnapshot.data ?? [];
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                itemCount: newsList.length,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    // 메인 뉴스는 별도로 로드 완료, 이제 mainNews 변수 사용
+                    return GestureDetector(
+                      onTap: () => _navigateToDetail(mainNews),
+                      child: _buildFeaturedNewsCard(mainNews),
+                    );
+                  }
+                  if (newsList[index].newsId == mainNews.newsId) {
+                    return const SizedBox.shrink();
+                  }
+                  final newsItem = newsList[index];
+                  return GestureDetector(
+                    onTap: () => _navigateToDetail(newsItem),
+                    child: NewsCard(news: newsItem),
+                  );
+                },
+              );
             },
           );
         },
@@ -152,7 +183,8 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
       child: Stack(
         children: [
           Positioned.fill(
-            child: Image.network(
+            child: news.newsImage.isNotEmpty
+                ? Image.network(
               news.newsImage,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) => Container(
@@ -161,9 +193,14 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
                   child: Icon(Icons.broken_image, color: Colors.grey),
                 ),
               ),
+            )
+                : Container(
+              color: Colors.grey[300],
+              child: const Center(
+                child: Icon(Icons.broken_image, color: Colors.grey),
+              ),
             ),
           ),
-
           Positioned(
             top: 10,
             left: 10,
@@ -192,20 +229,17 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
               ),
             ),
           ),
-
           Positioned(
             top: 10,
             right: 10,
-            child: Container(
-              child: IconButton(
-                icon: const Icon(Icons.bookmark_border, color: Colors.white),
-                onPressed: () {
-                  // 북마크 기능 추가 예정
-                },
+            child: IconButton(
+              icon: Icon(
+                  news.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                  color: news.isBookmarked ? Colors.yellow : Colors.white
               ),
+              onPressed: () => _toggleBookmark(news),
             ),
           ),
-
           Positioned(
             bottom: 0,
             left: 0,
@@ -244,13 +278,15 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
                         radius: 10,
                         backgroundColor: Colors.transparent,
                         child: ClipOval(
-                          child: Image.network(
+                          child: news.companyLogo.isNotEmpty
+                              ? Image.network(
                             news.companyLogo,
                             width: 20,
                             height: 20,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) => Text(news.companyName.isNotEmpty ? news.companyName.substring(0, 1) : ''),
-                          ),
+                          )
+                              : const SizedBox.shrink(),
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -286,72 +322,6 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPagination() {
-    const Color selectedColor = Color(0xFF2B3A66);
-    const Color unselectedColor = Color(0xFFACB0BF);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-              icon: const Icon(Icons.keyboard_double_arrow_left),
-              color: unselectedColor,
-              splashColor: selectedColor.withOpacity(0.2),
-              highlightColor: selectedColor.withOpacity(0.1),
-              onPressed: () => _jumpPages(-10),
-              visualDensity: VisualDensity.compact
-          ),
-          IconButton(
-              icon: const Icon(Icons.keyboard_arrow_left),
-              color: unselectedColor,
-              splashColor: selectedColor.withOpacity(0.2),
-              highlightColor: selectedColor.withOpacity(0.1),
-              onPressed: () => _jumpPages(-1),
-              visualDensity: VisualDensity.compact
-          ),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text.rich(
-                TextSpan(
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Pretendard'),
-                    children: [
-                      TextSpan(
-                        text: '$_currentPage', // 현재 페이지
-                        style: const TextStyle(color: selectedColor, fontSize: 14),
-                      ),
-                      TextSpan(
-                        text: ' / $_totalPages', // 총 페이지
-                        style: const TextStyle(color: unselectedColor, fontSize: 14),
-                      ),
-                    ]
-                )
-            ),
-          ),
-
-          IconButton(
-              icon: const Icon(Icons.keyboard_arrow_right),
-              color: unselectedColor,
-              splashColor: selectedColor.withOpacity(0.2),
-              highlightColor: selectedColor.withOpacity(0.1),
-              onPressed: () => _jumpPages(1),
-              visualDensity: VisualDensity.compact
-          ),
-          IconButton(
-              icon: const Icon(Icons.keyboard_double_arrow_right),
-              color: unselectedColor,
-              splashColor: selectedColor.withOpacity(0.2),
-              highlightColor: selectedColor.withOpacity(0.1),
-              onPressed: () => _jumpPages(10),
-              visualDensity: VisualDensity.compact
           ),
         ],
       ),

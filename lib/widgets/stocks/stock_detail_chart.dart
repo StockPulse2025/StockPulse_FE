@@ -82,8 +82,9 @@ class StockDetailChart extends StatelessWidget {
                     getTitlesWidget: (value, meta) {
                       int index = value.toInt();
                       if (index >= 0 && index < candleData.length) {
+                        // candleData[index]['date']는 이미 DateTime 타입이므로 캐스팅 불필요
                         DateTime date = candleData[index]['date'];
-                        final format = selectedPeriod == '1개월' ? 'yy/MM' : 'MM/dd';
+                        final format = selectedPeriod == 'MONTH' ? 'yy/MM' : 'MM/dd';
                         return Text(DateFormat(format).format(date), style: const TextStyle(color: Colors.grey, fontSize: 10));
                       }
                       return const Text('');

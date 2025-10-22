@@ -22,22 +22,31 @@ class _NewsCardState extends State<NewsCard> {
   @override
   void initState() {
     super.initState();
-    _isBookmarked = widget.news.isBookmarked;
   }
 
   Future<void> _toggleBookmark() async {
+   final originalBookmarkStatus = widget.news.isBookmarked;
     setState(() {
-      _isBookmarked = !_isBookmarked;
-      widget.news.isBookmarked = _isBookmarked;
+      widget.news.isBookmarked = !widget.news.isBookmarked;
     });
+
     try {
-      await ApiService().updateBookmarkStatus(widget.news.newsId, _isBookmarked);
+      final newStatus = await ApiService().updateBookmarkStatus(widget.news.newsId);
+      if (mounted) {
+        setState(() {
+          widget.news.isBookmarked = newStatus;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isBookmarked = !_isBookmarked;
-        widget.news.isBookmarked = _isBookmarked;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('북마크 저장 실패')));
+      // 에러 발생 시 원상 복구
+      if (mounted) {
+        setState(() {
+          widget.news.isBookmarked = originalBookmarkStatus;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('북마크 저장에 실패했습니다.')),
+        );
+      }
     }
   }
 
@@ -156,9 +165,9 @@ class _NewsCardState extends State<NewsCard> {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             icon: Icon(
-                _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                color: _isBookmarked ? const Color(0xFF2B3A66) : Colors.grey,
-                size: 24
+              widget.news.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: widget.news.isBookmarked ? const Color(0xFF2B3A66) : Colors.grey,
+              size: 24,
             ),
             onPressed: _toggleBookmark,
           ),

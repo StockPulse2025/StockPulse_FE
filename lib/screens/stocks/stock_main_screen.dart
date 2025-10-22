@@ -17,52 +17,84 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
   late TabController _tabController;
   late TabController _kospiTabController;
 
-  int _currentPage = 1;
-  final int _totalPages = 8;
-
-  List<Stock> _allStocks = [];
+  List<Stock> _rankedStocks = [];
   List<Stock> _myStocks = [];
-  bool _isLoadingAllStocks = true;
+  bool _isLoadingRankedStocks = true;
   bool _isLoadingMyStocks = true;
 
   final ApiService apiService = ApiService();
+  String _currentRankingType = 'TRADING_VALUE'; // 기본값: 거래대금
 
-  void _goToPage(int page) {
-    setState(() {
-      _currentPage = page.clamp(1, _totalPages);
-      _isLoadingAllStocks = true;
-    });
-    _fetchStocks();
-  }
-
-  void _jumpPages(int amount) {
-    _goToPage(_currentPage + amount);
-  }
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _kospiTabController = TabController(length: 4, vsync: this);
-    _fetchStocks();
+
+    // 코스피 탭 컨트롤러 리스너
+    _kospiTabController.addListener(_handleTabSelection);
+
+    // 초기 데이터 로드
+    _fetchRankedStocks();
+    _fetchMyStocks();
   }
 
-  Future<void> _fetchStocks() async {
+  void _handleTabSelection() {
+    if (_kospiTabController.indexIsChanging) return;
+
+    switch (_kospiTabController.index) {
+      case 0:
+        _currentRankingType = 'TRADING_VALUE';
+        break;
+      case 1:
+        _currentRankingType = 'TRADING_VOLUME';
+        break;
+      case 2:
+        _currentRankingType = 'TOP_GAINERS';
+        break;
+      case 3:
+        _currentRankingType = 'TOP_LOSERS';
+        break;
+    }
+    _fetchRankedStocks(); // 탭 변경 시 새로운 기준으로 데이터 요청
+  }
+
+  Future<void> _fetchRankedStocks() async {
+    setState(() => _isLoadingRankedStocks = true);
     try {
-      final all = await apiService.fetchAllStocks(_currentPage);
-      final mine = await apiService.fetchMyStocks();
+      final stocks = await apiService.fetchStockRanking(type: _currentRankingType);
       setState(() {
-        _allStocks = all;
-        _myStocks = mine;
-        _isLoadingAllStocks = false;
+        _rankedStocks = stocks;
+        _isLoadingRankedStocks = false;
+      });
+    } catch (e) {
+      print('종목 순위 로드 실패: $e');
+      setState(() => _isLoadingRankedStocks = false);
+    }
+  }
+
+  Future<void> _fetchMyStocks() async {
+    setState(() => _isLoadingMyStocks = true);
+    try {
+      final stocks = await apiService.fetchMyStocks();
+      setState(() {
+        _myStocks = stocks;
         _isLoadingMyStocks = false;
       });
     } catch (e) {
-      setState(() {
-        _isLoadingAllStocks = false;
-        _isLoadingMyStocks = false;
-      });
+      print('내 주식 로드 실패: $e');
+      setState(() => _isLoadingMyStocks = false);
     }
+  }
+
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _kospiTabController.removeListener(_handleTabSelection);
+    _kospiTabController.dispose();
+    super.dispose();
   }
 
   final Color navyColor = const Color(0xFF2B3A66);
@@ -132,7 +164,7 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
   }
 
   Widget _buildAllStocksTab() {
-    return _isLoadingAllStocks
+    return _isLoadingRankedStocks
         ? const Center(child: CircularProgressIndicator())
         : Column(
       children: [
@@ -199,13 +231,16 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
               height: 0, thickness: 2, color: Color(0xFFE8EBF2)),
         ),
         Expanded(
-          child: TabBarView(
+          child: _isLoadingRankedStocks
+              ? const Center(child: CircularProgressIndicator())
+              : TabBarView(
             controller: _kospiTabController,
+            // 각 뷰는 동일한 리스트 위젯을 사용하지만, 데이터(_rankedStocks)가 탭 선택에 따라 변경됨
             children: [
-              _buildPaginatedKospi50List(),
-              _buildPaginatedKospi50List(),
-              _buildPaginatedKospi50List(),
-              _buildPaginatedKospi50List(),
+              _buildRankedStockList(),
+              _buildRankedStockList(),
+              _buildRankedStockList(),
+              _buildRankedStockList(),
             ],
           ),
         ),
@@ -239,68 +274,43 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildPaginatedKospi50List() {
+  Widget _buildRankedStockList() {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
-      itemCount: _allStocks.length + 1,
+      itemCount: _rankedStocks.length,
       itemBuilder: (context, index) {
-        if (index == _allStocks.length) return _buildPagination();
-
-        final stock = _allStocks[index];
+        final stock = _rankedStocks[index];
         return GestureDetector(
-          onTap: () =>
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) =>
-                    StockDetailScreen(stockId: stock.stockId)),
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => StockDetailScreen(stockId: stock.stockId),
               ),
+            );
+            _fetchRankedStocks();
+            _fetchMyStocks();
+          },
           child: Container(
             margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 24.0),
             decoration: BoxDecoration(
               color: index % 2 == 0 ? const Color(0xFFF9FAFB) : Colors.white,
               borderRadius: BorderRadius.circular(7.0),
             ),
+            // [수정] price와 changeRate를 String이 아닌 숫자 타입(int, double) 그대로 전달합니다.
             child: Kospi50ListItem(
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 10.0, vertical: 10.0),
+              stockId: stock.stockId,
+              isOwned: stock.owned,
+              isFavorite: stock.favorite,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 10.0),
               rank: stock.rank.toString(),
               logoPath: stock.imageUrl ?? '',
               name: stock.name,
-              price: '${stock.currentPrice}원',
-              change: '${stock.changeRate.toStringAsFixed(1)}%',
+              price: stock.currentPrice,       // <-- String 대신 int 타입으로 전달
+              changeRate: stock.changeRate,
             ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildPagination() {
-    const Color selectedColor = Color(0xFF2B3A66);
-    const Color unselectedColor = Color(0xFFACB0BF);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(icon: const Icon(Icons.keyboard_double_arrow_left), color: unselectedColor, onPressed: () => _jumpPages(-10), visualDensity: VisualDensity.compact),
-          IconButton(icon: const Icon(Icons.keyboard_arrow_left), color: unselectedColor, onPressed: () => _jumpPages(-1), visualDensity: VisualDensity.compact),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text.rich(
-              TextSpan(
-                style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Pretendard'),
-                children: [
-                  TextSpan(text: '$_currentPage', style: const TextStyle(color: selectedColor, fontSize: 16)),
-                  TextSpan(text: ' / $_totalPages', style: const TextStyle(color: unselectedColor, fontSize: 14)),
-                ],
-              ),
-            ),
-          ),
-          IconButton(icon: const Icon(Icons.keyboard_arrow_right), color: unselectedColor, onPressed: () => _jumpPages(1), visualDensity: VisualDensity.compact),
-          IconButton(icon: const Icon(Icons.keyboard_double_arrow_right), color: unselectedColor, onPressed: () => _jumpPages(10), visualDensity: VisualDensity.compact),
-        ],
-      ),
     );
   }
 

@@ -1,8 +1,51 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 import 'login_screen.dart';
 
-class DeleteAccountScreen extends StatelessWidget {
+class DeleteAccountScreen extends StatefulWidget {
   const DeleteAccountScreen({super.key});
+
+  @override
+  _DeleteAccountScreenState createState() => _DeleteAccountScreenState();
+}
+
+class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
+  final ApiService apiService = ApiService();
+
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  void _onDeletePressed() async {
+    final password = _passwordController.text.trim();
+
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('비밀번호를 입력해주세요.')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    // 백엔드 API 호출 (비밀번호 확인 후 탈퇴)
+    bool success = await apiService.deactivateAccount(password);
+    setState(() => _isLoading = false);
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('회원 탈퇴가 완료되었습니다.')),
+      );
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (route) => false,
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('회원 탈퇴에 실패했습니다.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,29 +131,20 @@ class DeleteAccountScreen extends StatelessWidget {
 
             const SizedBox(height: 60),
 
-            Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
                 ElevatedButton(
-                onPressed: () {
-            // TODO: 비밀번호 일치 확인 및 실제 회원 탈퇴 로직 구현
-            Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (Route<dynamic> route) => false, // 이전의 모든 경로 제거
-        );
-    },
+                  onPressed: _isLoading ? null : _onDeletePressed,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2B3A66),
                     shape: const StadiumBorder(),
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   ),
-                  child: const Text(
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
                     '탈퇴하기',
                     style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
                   ),
-                ),
-                ],
-            ),
+                )
               ],
             ),
         ),

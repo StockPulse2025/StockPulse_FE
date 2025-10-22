@@ -12,6 +12,14 @@ class HomeTop5Section extends StatelessWidget {
       return const Center(child: Text('주식 데이터가 없습니다.'));
     }
 
+    String addComma(String price) {
+      final intValue = int.tryParse(price) ?? 0;
+      return intValue.toString().replaceAllMapped(
+        RegExp(r'\B(?=(\d{3})+(?!\d))'),
+            (match) => ',',
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
@@ -22,14 +30,17 @@ class HomeTop5Section extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          ...stockList.map((stock) {
+          ...stockList.asMap().entries.map((entry) {
+            final index = entry.key;
+            final stock = entry.value;
+
             return _buildTop5Item(
-              stock.rank.toString(),
-              stock.name,
-              '${stock.currentPrice}원',
-              '${stock.changeAmount >= 0 ? '+' : ''}${stock.changeAmount.toStringAsFixed(2)}%',
-              '${stock.changeRate >= 0 ? '+' : ''}${stock.changeRate.toStringAsFixed(2)}%',
-              0, // newsCount (백엔드에서 주는 경우 연동 가능)
+                (index + 1).toString(), // 1부터 5까지 순위 표시
+                stock.name,
+                '${addComma(stock.currentPrice.toString())}원',
+                '${stock.changeRate >= 0 ? '+' : ''}${stock.changeRate.toStringAsFixed(2)}%',
+                '${stock.predictInfluenceScore >= 0 ? '+' : ''}${stock.predictInfluenceScore.toStringAsFixed(2)}%',
+                0,
                 stock.imageUrl ?? 'https://default-image-url.com/default.png'
 
             );
@@ -78,11 +89,11 @@ class HomeTop5Section extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 130,
+            width: 140,
             child: RichText(
               text: TextSpan(
                 style: const TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.bold,
                   color: Colors.black,
                   fontFamily: 'Pretendard',

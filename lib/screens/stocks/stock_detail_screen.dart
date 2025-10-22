@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:stomp_dart_client/stomp.dart';
 import 'package:stomp_dart_client/stomp_config.dart';
-import 'package:stomp_dart_client/stomp_frame.dart';
-import 'package:http/http.dart' as https;
+// 'package:http/http.dart' as https;'는 삭제
 import 'dart:convert';
 
 import '../../models/news_model.dart';
+import '../../services/api_service.dart'; // ApiService import
 import '../../widgets/news/news_card.dart';
 import '../../widgets/stocks/stock_detail_chart.dart';
 
 class StockDetailScreen extends StatefulWidget {
-  final int stockId;  // stockId 필수 인자
+  final int stockId;
 
   const StockDetailScreen({super.key, required this.stockId});
   @override
@@ -20,6 +20,7 @@ class StockDetailScreen extends StatefulWidget {
 
 class _StockDetailScreenState extends State<StockDetailScreen> with TickerProviderStateMixin {
   late TabController _tabController;
+  final ApiService apiService = ApiService(); // ApiService 인스턴스
 
   String stockName = '';
   String stockSymbol = '';
@@ -27,84 +28,113 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
   int currentPrice = 0;
   double changeRate = 0.0;
   double changeAmount = 0.0;
+  bool isFavorite = false;
+  bool isOwned = false;
 
   List<Map<String, dynamic>> candleData = [];
-  List<Map<String, dynamic>> displayCandleData = [];
   double candleWidth = 8.0;
   double xAxisInterval = 5.0;
-  double chartViewportWidth = 0.0;
 
   List newsList = [];
-
   StompClient? stompClient;
-
   final ScrollController _chartScrollController = ScrollController();
-
-  String selectedPeriod = '1일';
-
+  String selectedPeriod = 'DAY'; // API에 맞는 값으로 변경: DAY, WEEK, MONTH
   bool isLoading = true;
+  bool isChartLoading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    fetchInitialStockData(); // 초기 데이터 REST API로 불러오기
+    fetchInitialStockData(); // 초기 데이터 로드
+    fetchChartData(); // 차트 데이터 로드
   }
 
-  // 초기 주식 상세 데이터 요청
+  // [수정] 종목 기본 정보 요청 (차트 제외)
   Future<void> fetchInitialStockData() async {
     try {
-      final response = await https.get(
-        Uri.parse('https://stockpulse.p-e.kr/api/v1/stocks/${widget.stockId}/detail'),
-        headers: {'Content-Type': 'application/json'},
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final result = data['result'];
-        setState(() {
-          stockName = result['name'];      // 주식 이름 저장
-          stockSymbol = result['symbol'];  // 주식 심볼 저장
-          stockImageUrl = result['imageUrl'];  // 주식 이미지 URL 저장
-          currentPrice = (result['currentPrice'] ?? 0).toInt();
-          changeRate = (result['changeRate'] ?? 0).toDouble();
-          changeAmount = (result['changeAmount'] ?? 0).toDouble();
-
-          candleData = generateCandleData(result['candles']);  // 차트 데이터 가공
-          filterCandleData(selectedPeriod);                     // 화면 표시용 차트 데이터 필터링
-
-          newsList = result['news'] ?? [];  // 뉴스 리스트 저장
-
-          isLoading = false;  // 데이터 로드 완료 상태로 변경
-        });
-        setupWebSocket();  // WebSocket 연결 시작
-      } else {
-        throw Exception('주식 상세 정보 로드 실패');
-      }
+      final result = await apiService.fetchStockDetail(widget.stockId);
+      setState(() {
+        stockName = result['name'] ?? '';
+        stockSymbol = result['symbol'] ?? '';
+        stockImageUrl = result['imageUrl'] ?? '';
+        currentPrice = (result['currentPrice'] ?? 0).toInt();
+        changeRate = (result['changeRate'] ?? 0).toDouble();
+        changeAmount = (result['changeAmount'] ?? 0).toDouble();
+        isFavorite = result['favorite'] ?? false;
+        isOwned = result['owned'] ?? false;
+        // newsList는 별도 API 호출이 필요할 수 있음 (Swagger에 상세 정보 조회 시 뉴스가 포함되어 있지 않음)
+        // newsList = result['news'] ?? [];
+        isLoading = false;
+      });
+      setupWebSocket();
     } catch (e) {
       setState(() => isLoading = false);
       print('주식 상세 정보 요청 중 오류 발생: $e');
     }
   }
 
-  // API에서 받은 차트 데이터 포맷 변환 (필요에 따라 구현)
-  List<Map<String, dynamic>> generateCandleData(dynamic rawData) {
-    if (rawData is List) {
-      return rawData.cast<Map<String, dynamic>>();
+  // [추가] 기간별 차트 데이터 요청
+  Future<void> fetchChartData() async {
+    setState(() => isChartLoading = true);
+    try {
+      final rawData = await apiService.fetchCandleData(stockId: widget.stockId, period: selectedPeriod);
+      setState(() {
+        candleData = parseCandleData(rawData); // 데이터 파싱
+        updateChartSettings(); // 차트 설정 업데이트
+        isChartLoading = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => scrollToEnd());
+    } catch (e) {
+      print('$selectedPeriod 차트 데이터 로딩 실패: $e');
+      setState(() {
+        isChartLoading = false;
+        candleData = []; // 에러 발생 시 데이터 초기화
+      });
     }
-    return [];
   }
 
-  // 선택된 기간에 따라 차트 데이터 필터링 및 화면 설정
-  void filterCandleData(String period) {
+  // [수정] API 응답(String)을 차트가 사용할 데이터 타입(double, DateTime)으로 변환
+  List<Map<String, dynamic>> parseCandleData(List<Map<String, dynamic>> rawData) {
+    return rawData.map((d) {
+      return {
+        'date': DateTime.parse(d['date']),
+        'open': double.tryParse(d['openPrice'] ?? '0') ?? 0.0,
+        'high': double.tryParse(d['highPrice'] ?? '0') ?? 0.0,
+        'low': double.tryParse(d['lowPrice'] ?? '0') ?? 0.0,
+        'close': double.tryParse(d['closePrice'] ?? '0') ?? 0.0,
+        'volume': double.tryParse(d['totalVolume'] ?? '0') ?? 0.0,
+      };
+    }).toList();
+  }
+
+  // [추가] 차트 기간 변경 시 호출되는 함수
+  void onPeriodChanged(String newPeriod) {
+    if (selectedPeriod == newPeriod) return;
     setState(() {
-      selectedPeriod = period;
-      // 간단한 예시로 전체 차트 데이터 그대로 표시
-      displayCandleData = candleData;
-      candleWidth = period == '1일' ? 30 : period == '1주' ? 40 : 50;
-      xAxisInterval = period == '1일' ? 3 : period == '1주' ? 2 : 1;
-      chartViewportWidth = candleWidth * displayCandleData.length;
+      selectedPeriod = newPeriod;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => scrollToEnd());  // 로딩 후 차트 슬라이더 끝으로 이동
+    fetchChartData(); // 새로운 기간으로 데이터 다시 요청
+  }
+
+  // [수정] 차트 설정 업데이트 로직 분리
+  void updateChartSettings() {
+    setState(() {
+      switch (selectedPeriod) {
+        case 'DAY':
+          candleWidth = 8.0;
+          xAxisInterval = 5.0;
+          break;
+        case 'WEEK':
+          candleWidth = 12.0;
+          xAxisInterval = 4.0;
+          break;
+        case 'MONTH':
+          candleWidth = 16.0;
+          xAxisInterval = 2.0;
+          break;
+      }
+    });
   }
 
   // 차트 스크롤 컨트롤러로 끝까지 스크롤 이동
@@ -160,6 +190,22 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
     return Scaffold(
       appBar: AppBar(
         title: Text(stockName),
+        actions: [ // 보유/관심 토글 버튼 추가
+          IconButton(
+            icon: Icon(Icons.credit_card, color: isOwned ? Color(0xFF2B3A66) : Color(0xFFACB0BF)),
+            onPressed: () async {
+              final newStatus = await apiService.toggleOwnedStock(widget.stockId);
+              setState(() => isOwned = newStatus);
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.favorite, color: isFavorite ? Color(0xFF2B3A66) : Color(0xFFACB0BF)),
+            onPressed: () async {
+              final newStatus = await apiService.toggleFavoriteStock(widget.stockId);
+              setState(() => isFavorite = newStatus);
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -183,13 +229,35 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
             child: TabBarView(
               controller: _tabController,
               children: [
-                StockDetailChart(
-                  candleData: displayCandleData,
-                  onTap: (date) => print('선택된 날짜: $date'),
-                  candleWidth: candleWidth,
-                  xAxisInterval: xAxisInterval,
-                  selectedPeriod: selectedPeriod,
+                // 차트 탭
+                Column(
+                  children: [
+                    // 기간 선택 버튼
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Wrap(
+                        spacing: 8.0,
+                        children: ['DAY', 'WEEK', 'MONTH'].map((period) {
+                          return ChoiceChip(
+                            label: Text(period),
+                            selected: selectedPeriod == period,
+                            onSelected: (_) => onPeriodChanged(period),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    isChartLoading
+                        ? const Expanded(child: Center(child: CircularProgressIndicator()))
+                        : StockDetailChart(
+                      candleData: candleData,
+                      onTap: (date) => print('선택된 날짜: $date'),
+                      candleWidth: candleWidth,
+                      xAxisInterval: xAxisInterval,
+                      selectedPeriod: selectedPeriod,
+                    ),
+                  ],
                 ),
+                // 실시간 뉴스 탭
                 ListView.builder(
                   itemCount: newsList.length,
                   itemBuilder: (context, index) {

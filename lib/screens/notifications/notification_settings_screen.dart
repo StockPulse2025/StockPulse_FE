@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
-import 'package:flutter/material.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -19,30 +18,58 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
 
   final Color navyColor = const Color(0xFF2B3A66);
   final Color sliderInactiveColor = const Color(0xFFACB0BF);
-  final ApiService apiService = ApiService();
+  // final ApiService apiService = ApiService(); // ApiService 인스턴스는 필요 시에만 생성
 
-  // 저장 기능 연동
+  // --- CHANGED ---
+  // 저장 기능은 백엔드 API가 준비될 때까지 임시로 처리합니다.
   Future<void> _saveSettings() async {
+    // --- 백엔드 알림 설정 저장 API가 준비되면 아래 주석을 풀고 연결합니다. ---
+    /*
     try {
-      await apiService.saveFilterSettings(
-        sortOrder: 'default',
-        stockFilter: _holdingsFilter ? 'holdings' : (_watchlistFilter ? 'watchlist' : 'all'),
-        selectedIndustries: [],
-        neutral: _neutralFilter,
-        good: _goodNewsFilter,
-        goodRange: _goodNewsRange,
-        bad: _badNewsFilter,
-        badRange: _badNewsRange,
+      // 1. ApiService에 알림 설정을 저장하는 새로운 함수를 만들어야 합니다.
+      //    (예: ApiService().saveNotificationSettings)
+      await ApiService().saveNotificationSettings(
+        holdingsEnabled: _holdingsFilter,
+        watchlistEnabled: _watchlistFilter,
+        neutralEnabled: _neutralFilter,
+        goodNewsEnabled: _goodNewsFilter,
+        goodNewsRange: _goodNewsRange,
+        badNewsEnabled: _badNewsFilter,
+        badNewsRange: _badNewsRange,
       );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('설정이 저장되었습니다.')));
+        Navigator.pop(context);
       }
-      Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('설정 저장 실패: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('설정 저장에 실패했습니다: $e')));
       }
     }
+    */
+
+    // --- 임시 코드 ---
+    // 현재는 기능이 준비되지 않았음을 사용자에게 알립니다.
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('알림 설정 저장 기능은 현재 준비 중입니다.')),
+      );
+      // 저장이 완료된 것처럼 화면을 닫아줍니다.
+      Navigator.pop(context);
+    }
+  }
+
+  void _resetFilters() {
+    setState(() {
+      _holdingsFilter = true;
+      _watchlistFilter = false;
+      _neutralFilter = false;
+      _goodNewsFilter = true;
+      _badNewsFilter = true;
+      _goodNewsRange = const RangeValues(50, 100);
+      _badNewsRange = const RangeValues(20, 70);
+    });
   }
 
   @override
@@ -108,17 +135,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () {
-                      setState(() {
-                        _holdingsFilter = true;
-                        _watchlistFilter = false;
-                        _neutralFilter = false;
-                        _goodNewsFilter = true;
-                        _badNewsFilter = true;
-                        _goodNewsRange = const RangeValues(50, 100);
-                        _badNewsRange = const RangeValues(20, 70);
-                      });
-                    },
+                    onPressed: _resetFilters, // 초기화 함수 연결
                     child: Text('초기화', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: navyColor)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -148,6 +165,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     );
   }
 
+  // _buildSectionTitle, _buildSwitchTile, _buildRangeSlider 위젯들은 수정 없이 그대로 사용합니다.
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(top: 24, bottom: 8),
@@ -178,7 +196,10 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             thumbColor: navyColor,
           ),
           child: RangeSlider(
-            values: values, min: 0, max: 100, divisions: 100,
+            values: values,
+            min: 0,
+            max: 100,
+            divisions: 100,
             labels: RangeLabels(values.start.round().toString(), values.end.round().toString()),
             onChanged: onChanged,
           ),
@@ -197,9 +218,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       contentPadding: EdgeInsets.zero,
-                    )
-                )
-            ),
+                    ))),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8.0),
               child: Text('~', style: TextStyle(fontSize: 12)),
@@ -215,9 +234,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       contentPadding: EdgeInsets.zero,
-                    )
-                )
-            ),
+                    ))),
           ],
         )
       ],

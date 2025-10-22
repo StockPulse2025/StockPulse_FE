@@ -1,139 +1,161 @@
 import 'package:flutter/material.dart';
+
+import 'package:stockpulse2/models/news_detail_model.dart';
 import '../lounge/create_post_screen.dart';
 import '../../models/news_model.dart';
 import '../../models/topstock_model.dart';
 import '../../services/api_service.dart';
 
 class NewsDetailScreen extends StatefulWidget {
-  final News news;
-
-  const NewsDetailScreen({super.key, required this.news});
+  final int newsId;
+  const NewsDetailScreen({super.key, required this.newsId});
 
   @override
   State<NewsDetailScreen> createState() => _NewsDetailScreenState();
 }
 
 class _NewsDetailScreenState extends State<NewsDetailScreen> {
-  late bool _isBookmarked;
-  late Future<List<TopStock>> _topStocksFuture;
+  late Future<NewsDetail> _newsDetailFuture;
 
   @override
   void initState() {
     super.initState();
-    _isBookmarked = widget.news.isBookmarked;
-    _topStocksFuture = ApiService().fetchTopStocks(widget.news.newsId);
+    _newsDetailFuture = ApiService().fetchNewsDetail(widget.newsId);
   }
 
-  Future<void> _toggleBookmark() async {
-    setState(() {
-      _isBookmarked = !_isBookmarked;
-      widget.news.isBookmarked = _isBookmarked;
-    });
+  Future<void> _toggleBookmark(News news) async {
+    // 서버에 토글 요청
+    await ApiService().updateBookmarkStatus(news.newsId);
+
+    // 요청 성공 후 화면 데이터를 새로고침
+    if (mounted) {
+      setState(() {
+        _newsDetailFuture = ApiService().fetchNewsDetail(widget.newsId);
+      });
+    }
+  }
+
+  void _showSummary(News news) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
 
     try {
-      await ApiService().updateBookmarkStatus(widget.news.newsId, _isBookmarked);
+      final summaryText = await ApiService().fetchNewsSummary(news.newsId);
+      if (!mounted) return;
+      Navigator.pop(context); // 로딩 다이얼로그 닫기
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        isScrollControlled: true,
+        builder: (context) => Container(
+          height: MediaQuery.of(context).size.height * 0.4,
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  '뉴스 요약',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  summaryText,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.left,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     } catch (e) {
-      setState(() {
-        _isBookmarked = !_isBookmarked;
-        widget.news.isBookmarked = _isBookmarked;
-      });
+      if (!mounted) return;
+      Navigator.pop(context); // 에러 발생 시에도 로딩 다이얼로그 닫기
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('북마크 상태 저장 실패')),
+        SnackBar(content: Text("요약 정보 로드에 실패했습니다: ${e.toString()}")),
       );
     }
   }
 
-  void _showSummary() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.4,
-        padding: const EdgeInsets.all(24),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                '뉴스 요약',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                widget.news.summary ?? '요약 정보가 없습니다.',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-                textAlign: TextAlign.left,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _navigateToDiscussion() {
+  void _navigateToDiscussion(News news) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => CreatePostScreen(newsData: widget.news),
+        builder: (context) => CreatePostScreen(newsData: news),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final news = widget.news;
-    bool isPriceUp =
-        (double.tryParse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) ?? 0) > 0;
-    Color positiveColor = const Color(0xFFF04E52);
-    Color negativeColor = const Color(0xFF3687F6);
+    return FutureBuilder<NewsDetail>(
+      future: _newsDetailFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            appBar: AppBar(backgroundColor: Colors.white, surfaceTintColor: Colors.white, elevation: 1),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(backgroundColor: Colors.white, surfaceTintColor: Colors.white, elevation: 1),
+            body: Center(child: Text('상세 정보를 불러오지 못했습니다: ${snapshot.error}')),
+          );
+        }
+        if (!snapshot.hasData) {
+          return Scaffold(
+            appBar: AppBar(backgroundColor: Colors.white, surfaceTintColor: Colors.white, elevation: 1),
+            body: const Center(child: Text('뉴스 데이터가 없습니다.')),
+          );
+        }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          _buildAppBarAction(Icons.article, '뉴스요약', _showSummary),
-          _buildAppBarAction(Icons.chat_bubble, '토론하기', _navigateToDiscussion),
-          IconButton(
-            icon: Icon(
-              _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-              color: _isBookmarked ? const Color(0xFF2B3A66) : Colors.grey,
-              size: 35,
+        final newsDetail = snapshot.data!;
+        final news = newsDetail.newsInfo;
+        final topStocks = newsDetail.topStocks;
+
+        bool isPriceUp = (double.tryParse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) ?? 0) > 0;
+        Color positiveColor = const Color(0xFFF04E52);
+        Color negativeColor = const Color(0xFF3687F6);
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.white,
+            elevation: 1,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+              onPressed: () => Navigator.pop(context),
             ),
-            onPressed: _toggleBookmark,
+            actions: [
+              _buildAppBarAction(Icons.article, '뉴스요약', () => _showSummary(news)),
+              _buildAppBarAction(Icons.chat_bubble, '토론하기', () => _navigateToDiscussion(news)),
+              IconButton(
+                icon: Icon(
+                  news.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                  color: news.isBookmarked ? const Color(0xFF2B3A66) : Colors.grey,
+                  size: 35,
+                ),
+                onPressed: () => _toggleBookmark(news),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: ListView(
-        children: [
-          _buildHeaderImage(news, positiveColor, negativeColor, isPriceUp),
-          _buildPredictionSection(news, positiveColor),
-          FutureBuilder<List<TopStock>>(
-            future: _topStocksFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text('주식 정보 로드 실패: ${snapshot.error}'));
-              }
-              final topStocks = snapshot.data ?? [];
-              if (topStocks.isEmpty) {
-                return const Center(child: Text('예측 등락률 TOP 종목 정보가 없습니다.'));
-              }
-              return _buildTopStocksSection(topStocks);
-            },
+          body: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              _buildHeaderImage(news, positiveColor, negativeColor, isPriceUp),
+              _buildPredictionSection(news, positiveColor),
+              _buildTopStocksSection(topStocks),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -162,8 +184,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     );
   }
 
-  Widget _buildHeaderImage(
-      News news, Color positiveColor, Color negativeColor, bool isPriceUp) {
+  Widget _buildHeaderImage(News news, Color positiveColor, Color negativeColor, bool isPriceUp) {
     return Stack(
       children: [
         Container(
@@ -213,12 +234,9 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              Text(news.newsTitle,
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 23, fontWeight: FontWeight.bold)),
+              Text(news.newsTitle, style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text(news.dateSource,
-                  style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+              Text(news.dateSource, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -246,21 +264,14 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      Text(news.companyName,
-                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text(news.companyName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 8),
-                      Text(news.currentPrice,
-                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text(news.currentPrice, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 4),
-                      Text(news.priceChange,
-                          style: TextStyle(
-                              color: isPriceUp ? positiveColor : negativeColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold)),
+                      Text(news.priceChange, style: TextStyle(color: isPriceUp ? positiveColor : negativeColor, fontSize: 12, fontWeight: FontWeight.bold)),
                     ],
                   ),
-                  const Text('원문 기사 바로가기 >',
-                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                  const Text('원문 기사 바로가기 >', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                 ],
               )
             ],
@@ -294,20 +305,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                   text: TextSpan(
                     style: const TextStyle(color: Colors.black, fontSize: 15, fontFamily: 'Pretendard', fontWeight: FontWeight.bold),
                     children: [
-                      const TextSpan(
-                        text: 'StorkPulse',
-                        style: TextStyle(color: Color(0xFF2B3A66)),
-                      ),
+                      const TextSpan(text: 'StorkPulse', style: TextStyle(color: Color(0xFF2B3A66))),
                       const TextSpan(text: '는 '),
-                      TextSpan(
-                        text: '"${news.companyName}"',
-                        style: const TextStyle(color: Color(0xFFFEB12C)),
-                      ),
+                      TextSpan(text: '"${news.companyName}"', style: const TextStyle(color: Color(0xFFFEB12C))),
                       const TextSpan(text: ' 주가가 '),
-                      TextSpan(
-                        text: '${news.prediction} ',
-                        style: TextStyle(color: predictionColor),
-                      ),
+                      TextSpan(text: '${news.prediction} ', style: TextStyle(color: predictionColor)),
                       const TextSpan(text: '될 것으로 예측합니다!'),
                     ],
                   ),
@@ -407,8 +409,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             ),
             RichText(
               text: TextSpan(
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black, fontFamily: 'Pretendard'),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.black, fontFamily: 'Pretendard'),
                 children: [
                   TextSpan(text: isPredictionPositive ? '📈최대 ' : '📉최소 '),
                   TextSpan(

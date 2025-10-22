@@ -17,13 +17,24 @@ class _NewsScrapScreenState extends State<NewsScrapScreen> {
   @override
   void initState() {
     super.initState();
-    bookmarkedNewsFuture = ApiService().fetchBookmarkedNewsList();
+    _loadBookmarkedNews();
+  }
+
+  void _loadBookmarkedNews() {
+   bookmarkedNewsFuture = ApiService().fetchNewsWithFilter(
+     favoriteStock: true,
+     allStock: false,
+    );
   }
 
   void _navigateToDetail(News news) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => NewsDetailScreen(news: news)),
-    );
+      MaterialPageRoute(builder: (context) => NewsDetailScreen(newsId: news.newsId)),
+    ).then((_) {
+      setState(() {
+        _loadBookmarkedNews();
+      });
+    });
   }
 
   @override
@@ -32,7 +43,8 @@ class _NewsScrapScreenState extends State<NewsScrapScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
+        surfaceTintColor: Colors.white,
+        elevation: 1,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
           onPressed: () => Navigator.of(context).pop(),
@@ -51,7 +63,7 @@ class _NewsScrapScreenState extends State<NewsScrapScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('스크랩 뉴스 로드 실패: ${snapshot.error}'));
+            return Center(child: Text('스크랩한 뉴스를 불러오지 못했습니다.\n${snapshot.error}'));
           }
           final bookmarkedNews = snapshot.data ?? [];
           if (bookmarkedNews.isEmpty) {
@@ -59,6 +71,7 @@ class _NewsScrapScreenState extends State<NewsScrapScreen> {
           }
 
           return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
             itemCount: bookmarkedNews.length,
             itemBuilder: (context, index) {
               final newsItem = bookmarkedNews[index];

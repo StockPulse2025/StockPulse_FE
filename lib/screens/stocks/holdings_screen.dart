@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import '../../models/stock_model.dart';
 import '../../widgets/stocks/my_stock_list_item.dart';
 import '../../services/api_service.dart';
+import '../stocks/stock_detail_screen.dart';
 
 class HoldingsScreen extends StatefulWidget {
-  const HoldingsScreen({Key? key}) : super(key: key);
+  const HoldingsScreen({super.key});
 
   @override
-  _HoldingsScreenState createState() => _HoldingsScreenState();
+  State<HoldingsScreen> createState() => _HoldingsScreenState();
 }
 
 class _HoldingsScreenState extends State<HoldingsScreen> {
@@ -22,36 +23,50 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
   }
 
   Future<void> loadHoldings() async {
+    if (!isLoading) setState(() => isLoading = true);
     try {
-      final result = await apiService.fetchHoldings();
-      setState(() {
-        holdings = result;
-        isLoading = false;
-      });
+      // 'OWN' 타입으로 prediction API 호출
+      final result = await apiService.fetchPredictionStocks(myStockType: 'OWN');
+      if (mounted) { // 비동기 작업 후 위젯이 여전히 존재하는지 확인
+        setState(() {
+          holdings = result;
+          isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
       print('보유 종목 조회 실패: $e');
+      // 사용자에게 에러 알림
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('보유 종목을 불러오는데 실패했습니다.')),
+      );
     }
   }
 
   Map<String, List<Stock>> groupStocksByFirstLetter(List<Stock> stocks) {
     Map<String, List<Stock>> grouped = {};
     for (var stock in stocks) {
-      String firstChar = stock.name.isNotEmpty ? stock.name[0].toUpperCase() : '#';
-      if (!grouped.containsKey(firstChar)) {
-        grouped[firstChar] = [];
+      // 한글 자음 추출 로직
+      String getKoreanFirstConsonant(String text) {
+        const consonants = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+        if (text.isEmpty) return '#';
+        int unicode = text.codeUnitAt(0);
+        if (unicode >= 44032 && unicode <= 55203) { // 한글 범위
+          int consonantIndex = (unicode - 44032) ~/ 588;
+          return consonants[consonantIndex];
+        }
+        return text[0].toUpperCase(); // 한글이 아니면 첫 글자
       }
-      grouped[firstChar]!.add(stock);
+      String firstChar = getKoreanFirstConsonant(stock.name);
+      grouped.putIfAbsent(firstChar, () => []).add(stock);
     }
     return grouped;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
     final groupedStocks = groupStocksByFirstLetter(holdings);
     final sortedKeys = groupedStocks.keys.toList()..sort();
 
@@ -59,7 +74,7 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color(0xFFF9FAFB),
         titleSpacing: 0,
         centerTitle: false,
         title: const Text('보유종목', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -67,9 +82,12 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        flexibleSpace: Container(color: const Color(0xFFF9FAFB)),
       ),
-      body: ListView.builder(
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : holdings.isEmpty
+          ? const Center(child: Text('보유 중인 종목이 없습니다.'))
+          : ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: sortedKeys.length,
         itemBuilder: (context, index) {
@@ -80,21 +98,32 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 8, bottom: 10),
+                padding: const EdgeInsets.only(top: 16, bottom: 10, left: 4),
                 child: Text(key, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
               ),
               Column(
                 children: stocks.map((stock) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: MyStockListItem(
-                      rank: stock.rank.toString(),
-                      logoPath: stock.imageUrl ?? '',
-                      name: stock.name,
-                      price: '${stock.currentPrice}원',
-                      change: '${stock.changeRate.toStringAsFixed(1)}%',
-                      prediction: stock.prediction ?? '',
-                      newsCount: stock.newsCount ?? 0,
+                    child: GestureDetector(
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => StockDetailScreen(stockId: stock.stockId),
+                          ),
+                        );
+                        loadHoldings();
+                      },
+                      child: MyStockListItem(
+                        rank: stock.rank.toString(),
+                        logoPath: stock.imageUrl ?? '',
+                        name: stock.name,
+                        price: '${stock.currentPrice}원',
+                        change: '${stock.changeRate.toStringAsFixed(1)}%',
+                        prediction: stock.prediction ?? '',
+                        newsCount: stock.newsCount ?? 0,
+                      ),
                     ),
                   );
                 }).toList(),

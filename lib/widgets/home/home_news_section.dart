@@ -82,7 +82,7 @@ class HomeNewsSection extends StatelessWidget {
                       children: [
                         const TextSpan(text: '예측주가 ', style: TextStyle(color: Colors.black)),
                         TextSpan(
-                          text: isPredictionPositive ? '+' : '-',
+                          text: news.prediction,
                           style: TextStyle(color: isPredictionPositive ? const Color(0xFFFF0000) : const Color(0xFF0042FF)),
                         ),
                       ],

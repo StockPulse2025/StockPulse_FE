@@ -2,54 +2,63 @@ import 'package:flutter/material.dart';
 
 class CustomDialogs {
   // 닉네임 변경 팝업
-  static void showNicknameDialog(BuildContext context) {
-    showDialog(
+  static Future<String?> showNicknameDialog(
+      BuildContext context, {
+        required String currentNickname,
+        required Future<bool> Function(String) onUpdate, // 닉네임 업데이트 콜백
+      }) async {
+    TextEditingController nicknameController = TextEditingController(text: currentNickname);
+    String? newNickname;
+
+    await showDialog<String>(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text(
-            '닉네임 변경',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: const TextField(
-            decoration: InputDecoration(hintText: "새로운 닉네임을 입력하세요"),
+          title: const Text('닉네임 변경'),
+          content: TextField(
+            controller: nicknameController,
+            decoration: const InputDecoration(
+              hintText: '새로운 닉네임을 입력하세요',
+            ),
           ),
           actions: <Widget>[
             TextButton(
-              child: const Text(
-                '취소',
-                style: TextStyle(
-                  color: Color(0xFF2B3A66),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('취소'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
             ),
             TextButton(
-              child: const Text(
-                '확인',
-                style: TextStyle(
-                  color: Color(0xFF2B3A66),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              onPressed: () {
-                // TODO: 닉네임 변경 로직
-                Navigator.of(context).pop();
+              child: const Text('변경'),
+              onPressed: () async {
+                final inputNickname = nicknameController.text.trim();
+                if (inputNickname.isNotEmpty && inputNickname != currentNickname) {
+                  bool success = await onUpdate(inputNickname);
+                  if (success) {
+                    newNickname = inputNickname; // 성공 시에만 새 닉네임 저장
+                    Navigator.of(dialogContext).pop(newNickname); // 다이얼로그 닫기
+                  }
+                  // 실패 시 onUpdate 내부에서 스낵바 표시하고 다이얼로그는 닫지 않음
+                } else {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('닉네임을 입력하거나 현재 닉네임과 다른 닉네임을 입력해주세요.')),
+                  );
+                }
               },
             ),
           ],
         );
       },
     );
+    return newNickname;
   }
 
   // 로그아웃 팝업
-  static void showLogoutDialog(BuildContext context) {
+  // 로그아웃 팝업
+  static void showLogoutDialog(BuildContext context, {required VoidCallback onConfirm}) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) { // buildContext를 dialogContext로 변경하여 혼동 방지
         return AlertDialog(
           backgroundColor: Colors.white,
           title: const Text(
@@ -69,7 +78,7 @@ class CustomDialogs {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
             ),
             TextButton(
               child: const Text(
@@ -80,8 +89,8 @@ class CustomDialogs {
                 ),
               ),
               onPressed: () {
-                // TODO: 로그아웃 로직
-                Navigator.of(context).pop();
+                Navigator.of(dialogContext).pop(); // 다이얼로그 닫기
+                onConfirm(); // 전달받은 콜백 함수 실행
               },
             ),
           ],

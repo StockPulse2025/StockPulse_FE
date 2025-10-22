@@ -3,15 +3,15 @@ class News {
   final String newsImage;
   final String companyLogo;
   final String newsTitle;
-  final String dateSource;
+  final String dateSource; // 'press'와 'publishedDate'를 조합
   final String companyName;
   final String currentPrice;
   final String priceChange;
-  final bool isGoodNews;
-  final bool isPredictionPositive;
-  final String prediction;
-  final String? summary;
-  bool isBookmarked;
+  final bool isGoodNews; // 'sentiment' 기반으로 계산
+  final bool isPredictionPositive; // 'influenceScore' 기반으로 계산
+  final String prediction; // 'influenceScore' 기반으로 생성
+  final String? summary; // 요약은 별도 API 호출 필요
+  bool isBookmarked; // DTO의 'scrapped'에 해당
 
   News({
     required this.newsId,
@@ -25,36 +25,53 @@ class News {
     required this.isGoodNews,
     required this.isPredictionPositive,
     required this.prediction,
-    required this.summary,
-    this.isBookmarked = false,
+    this.summary,
+    required this.isBookmarked,
   });
 
-  static bool parseBool(dynamic value, {bool defaultValue = false}) {
-    if (value == null) return defaultValue;
-    if (value is bool) return value;
-    if (value is String) return value.toLowerCase() == 'true';
-    if (value is int) return value != 0;
-    return defaultValue;
-  }
-
+  // 백엔드 응답(NewsDTO)을 News 모델로 변환하는 팩토리 생성자
   factory News.fromJson(Map<String, dynamic> json) {
-    final stockInfo = json['stockInfo'] ?? {};
+    // API 응답에 stockInfo 객체가 있는지 확인
+    final bool hasStockInfo = json.containsKey('stockInfo') &&
+        json['stockInfo'] != null;
+    final stockInfo = hasStockInfo
+        ? json['stockInfo']
+        : json; // stockInfo가 없으면 json 본체를 사용
+
     final sentiment = (json['sentiment'] ?? '').toString().toUpperCase();
+    final influenceScore = (json['influenceScore'] ?? 0.0).toDouble();
+
+    String formattedDate = '';
+    if (json['publishedDate'] != null) {
+      try {
+        DateTime parsedDate = DateTime.parse(json['publishedDate']);
+        formattedDate =
+        "${parsedDate.year}.${parsedDate.month.toString().padLeft(
+            2, '0')}.${parsedDate.day.toString().padLeft(2, '0')}";
+      } catch (e) {
+        formattedDate = json['publishedDate'];
+      }
+    }
+
+    String predictionText = influenceScore > 0 ? "+${influenceScore
+        .toStringAsFixed(2)}%" : "${influenceScore.toStringAsFixed(2)}%";
 
     return News(
       newsId: json['newsId'] ?? 0,
       newsImage: json['newsImage'] ?? '',
-      companyLogo: stockInfo['stockImage'] ?? '',
       newsTitle: json['newsTitle'] ?? '',
-      dateSource: json['publishedDate'] ?? '',
-      companyName: stockInfo['stockName'] ?? '',
-      currentPrice: stockInfo['currentPrice']?.toString() ?? '',
-      priceChange: stockInfo['priceChange']?.toString() ?? '',
-      isGoodNews: parseBool(json['isGoodNews'], defaultValue: sentiment == 'POSITIVE'),
-      isPredictionPositive: parseBool(json['isPredictionPositive'], defaultValue: sentiment == 'POSITIVE'),
-      prediction: json['prediction']?.toString() ?? '',
-      isBookmarked: parseBool(json['isBookmarked'], defaultValue: false),
-      summary: json['summary']?.toString(),
+      dateSource: "${json['press'] ?? '정보 없음'} | $formattedDate",
+      isBookmarked: json['scrapped'] ?? false,
+      isGoodNews: sentiment == 'POSITIVE',
+      companyLogo: json['stockImage'] ?? '',
+      companyName: json['stockName'] ?? '',
+      currentPrice: json['currentPrice']?.toString() ?? '0', // API 응답에 없으면 계속 '0'
+      priceChange: json['priceChange']?.toString() ?? '0',   // API 응답에 없으면 계속 '0'
+
+      // influenceScore로 계산된 값들
+      isPredictionPositive: influenceScore >= 0,
+      prediction: predictionText,
+      summary: json['reason'],
     );
   }
 }

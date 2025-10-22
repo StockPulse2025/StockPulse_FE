@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/news_model.dart';
 import 'package:stockpulse2/models/stock_model.dart';
 import '../../services/api_service.dart';
-import '../main_screen.dart';
+import '../home_screen.dart';
 import 'post_detail_screen.dart';
 import 'stock_selection_screen.dart';
 
@@ -61,7 +61,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     if (createdPostId != null) {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const MainScreen(initialIndex: 3)),
+        MaterialPageRoute(builder: (context) => const HomeScreen(initialIndex: 3)),
             (route) => false,
       );
 
