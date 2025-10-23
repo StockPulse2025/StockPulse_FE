@@ -3,8 +3,13 @@ import '../../models/news_model.dart';
 
 class HomeNewsSection extends StatelessWidget {
   final List<News> newsList;
+  final Function(int) onNewsTap;
 
-  const HomeNewsSection({required this.newsList, Key? key}) : super(key: key);
+  const HomeNewsSection({
+    required this.newsList,
+    required this.onNewsTap, // 콜백 함수를 필수로 받도록 설정
+    Key? key,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +36,10 @@ class HomeNewsSection extends StatelessWidget {
             separatorBuilder: (_, __) => const SizedBox(width: 16),
             itemBuilder: (context, index) {
               final news = newsList[index];
-              return _buildNewsCard(context, news);
+              return GestureDetector(
+                onTap: () => onNewsTap(news.newsId), // 탭하면 콜백 함수 실행
+                child: _buildNewsCard(context, news),
+              );
             },
           ),
         )

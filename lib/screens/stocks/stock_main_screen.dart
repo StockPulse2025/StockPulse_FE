@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:stomp_dart_client/stomp_dart_client.dart';
+import 'dart:convert';
+import 'package:collection/collection.dart';
+
 import 'stock_search_screen.dart';
 import '../../widgets/stocks/kospi_50_list_item.dart';
 import '../../widgets/stocks/my_stock_list_item.dart';
@@ -25,6 +29,11 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
   final ApiService apiService = ApiService();
   String _currentRankingType = 'TRADING_VALUE'; // 기본값: 거래대금
 
+  // 웹소켓 관련 상태 변수
+  StompClient? stompClient;
+  // 여러 구독을 관리하기 위한 Map. key: 구독 채널(destination), value: 구독 해제 함수
+  final Map<String, StompUnsubscribe?> _stompSubscriptions = {};
+
 
   @override
   void initState() {
@@ -32,12 +41,31 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     _tabController = TabController(length: 2, vsync: this);
     _kospiTabController = TabController(length: 4, vsync: this);
 
-    // 코스피 탭 컨트롤러 리스너
     _kospiTabController.addListener(_handleTabSelection);
 
-    // 초기 데이터 로드
-    _fetchRankedStocks();
-    _fetchMyStocks();
+    // 내 주식 탭 변경 리스너
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      if (_tabController.index == 1) {  // 내 주식 탭일 때
+        _fetchMyStocks();
+      }
+    });
+
+    _kospiTabController.addListener(_handleTabSelection);
+
+    // 초기 데이터 로드 후 웹소켓 연결
+    _initializeData();
+  }
+
+  // 초기 데이터 로드와 웹소켓 연결을 함께 처리하는 함수
+  Future<void> _initializeData() async {
+    // 두 API 호출을 동시에 진행
+    await Future.wait([
+      _fetchRankedStocks(),
+      _fetchMyStocks(),
+    ]);
+    // 데이터 로딩이 끝난 후 웹소켓 연결 시작
+    _connectToWebSocket();
   }
 
   void _handleTabSelection() {
@@ -64,13 +92,21 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     setState(() => _isLoadingRankedStocks = true);
     try {
       final stocks = await apiService.fetchStockRanking(type: _currentRankingType);
-      setState(() {
-        _rankedStocks = stocks;
-        _isLoadingRankedStocks = false;
-      });
+      if(mounted) {
+        setState(() {
+          _rankedStocks = stocks;
+          _isLoadingRankedStocks = false;
+        });
+      }
+      // 데이터 로드 성공 후, 웹소켓이 연결상태이고 현재 탭이 '전체 주식'이면 구독 실행
+      if (stompClient?.isActive == true && _tabController.index == 0) {
+        _subscribeToStocks(_rankedStocks);
+      }
     } catch (e) {
       print('종목 순위 로드 실패: $e');
-      setState(() => _isLoadingRankedStocks = false);
+      if(mounted) {
+        setState(() => _isLoadingRankedStocks = false);
+      }
     }
   }
 
@@ -78,13 +114,21 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     setState(() => _isLoadingMyStocks = true);
     try {
       final stocks = await apiService.fetchMyStocks();
-      setState(() {
-        _myStocks = stocks;
-        _isLoadingMyStocks = false;
-      });
+      if(mounted) {
+        setState(() {
+          _myStocks = stocks;
+          _isLoadingMyStocks = false;
+        });
+      }
+      // 데이터 로드 성공 후, 웹소켓이 연결상태이고 현재 탭이 '내 주식'이면 구독 실행
+      if (stompClient?.isActive == true && _tabController.index == 1) {
+        _subscribeToStocks(_myStocks);
+      }
     } catch (e) {
       print('내 주식 로드 실패: $e');
-      setState(() => _isLoadingMyStocks = false);
+      if(mounted) {
+        setState(() => _isLoadingMyStocks = false);
+      }
     }
   }
 
@@ -94,8 +138,109 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     _tabController.dispose();
     _kospiTabController.removeListener(_handleTabSelection);
     _kospiTabController.dispose();
+
+    // 웹소켓 구독 해제 및 연결 종료
+    _unsubscribeFromAllStocks();
+    stompClient?.deactivate();
+
     super.dispose();
   }
+
+  // 웹소켓 핵심 기능 함수들
+  // 1. 웹소켓 서버에 연결
+  void _connectToWebSocket() {
+    // 이미 연결 시도 중이거나 연결된 상태면 중복 실행 방지
+    if (stompClient != null && stompClient!.isActive) return;
+
+    stompClient = StompClient(
+      config: StompConfig(
+        url: 'ws://stockpulse.p-e.kr/ws-stock',
+        onConnect: (StompFrame frame) {
+          print('주식 홈 화면 웹소켓 연결 성공!');
+          // 현재 활성화된 탭의 주식 목록을 구독
+          if (_tabController.index == 0) {
+            _subscribeToStocks(_rankedStocks);
+          } else {
+            _subscribeToStocks(_myStocks);
+          }
+        },
+        onWebSocketError: (error) => print('웹소켓 연결 오류: $error'),
+        onDisconnect: (frame) => print('웹소켓 연결 해제'),
+      ),
+    );
+    stompClient!.activate();
+    print('웹소켓 연결 시도 중...');
+  }
+
+  // 2. 주식 목록을 받아 전부 구독
+  void _subscribeToStocks(List<Stock> stocks) {
+    if (stompClient?.isActive != true) return; // 연결 안되어 있으면 실행 안함
+
+    // 기존 구독 모두 해제
+    _unsubscribeFromAllStocks();
+
+    print('${stocks.length}개의 종목 구독 시작...');
+    for (final stock in stocks) {
+      // stock.symbol이 null이거나 비어있지 않은지 확인
+      if (stock.symbol != null && stock.symbol!.isNotEmpty) {
+        final destination = '/sub/${stock.symbol}';
+        // 이미 구독 중인지 확인
+        if (_stompSubscriptions.containsKey(destination)) continue;
+
+        _stompSubscriptions[destination] = stompClient!.subscribe(
+          destination: destination,
+          callback: _handleRealtimeStockData,
+        );
+      }
+    }
+  }
+
+  // 3. 모든 구독 해제
+  void _unsubscribeFromAllStocks() {
+    for (final unsubscribe in _stompSubscriptions.values) {
+      unsubscribe?.call();
+    }
+    _stompSubscriptions.clear();
+    print('모든 구독을 해제했습니다.');
+  }
+
+  // 4. 실시간 데이터 처리 및 화면 업데이트
+  void _handleRealtimeStockData(StompFrame frame) {
+    if (frame.body == null || !mounted) return;
+
+    try {
+      final data = jsonDecode(frame.body!) as Map<String, dynamic>;
+      final symbol = data['symbol'] as String?;
+      if (symbol == null) return;
+
+      bool needsUpdate = false;
+
+      // rankedStocks 리스트에서 해당 symbol을 가진 주식 찾기
+      final rankedStock = _rankedStocks.firstWhereOrNull((s) => s.symbol == symbol);
+      if (rankedStock != null) {
+        rankedStock.currentPrice = (data['currentPrice'] ?? rankedStock.currentPrice).toDouble();
+        rankedStock.changeRate = (data['changeRate'] ?? rankedStock.changeRate).toDouble();
+        needsUpdate = true;
+      }
+
+      // myStocks 리스트에서도 해당 symbol을 가진 주식 찾기
+      final myStock = _myStocks.firstWhereOrNull((s) => s.symbol == symbol);
+      if (myStock != null) {
+        myStock.currentPrice = (data['currentPrice'] ?? myStock.currentPrice).toDouble();
+        myStock.changeRate = (data['changeRate'] ?? myStock.changeRate).toDouble();
+        needsUpdate = true;
+      }
+
+      // 변경 사항이 있을 때만 setState 호출
+      if(needsUpdate) {
+        setState(() {});
+      }
+
+    } catch (e) {
+      print('❌ 실시간 데이터 처리 오류: $e');
+    }
+  }
+
 
   final Color navyColor = const Color(0xFF2B3A66);
   final Color positiveColor = const Color(0xFFFF0000);
@@ -195,9 +340,9 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
               Row(
                 children: [
                   _buildKospiCard(
-                      'KOSPI 80 🇰🇷', '2605.17', '0.24(0.07%)', true),
+                      'KOSPI 80 🇰🇷', '3,796.22', '−50.43(−1.31%)', false),
                   const SizedBox(width: 16),
-                  _buildKospiCard('코스피 🇰🇷', '2464.17', '-35.93(1.44%)', false),
+                  _buildKospiCard('코스피 🇰🇷', '3,845.56', '-38.12(-0.98%)', false),
                 ],
               ),
               const SizedBox(height: 32),
@@ -235,7 +380,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
               ? const Center(child: CircularProgressIndicator())
               : TabBarView(
             controller: _kospiTabController,
-            // 각 뷰는 동일한 리스트 위젯을 사용하지만, 데이터(_rankedStocks)가 탭 선택에 따라 변경됨
             children: [
               _buildRankedStockList(),
               _buildRankedStockList(),
@@ -296,7 +440,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
               color: index % 2 == 0 ? const Color(0xFFF9FAFB) : Colors.white,
               borderRadius: BorderRadius.circular(7.0),
             ),
-            // [수정] price와 changeRate를 String이 아닌 숫자 타입(int, double) 그대로 전달합니다.
             child: Kospi50ListItem(
               stockId: stock.stockId,
               isOwned: stock.owned,
@@ -305,7 +448,7 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
               rank: stock.rank.toString(),
               logoPath: stock.imageUrl ?? '',
               name: stock.name,
-              price: stock.currentPrice,       // <-- String 대신 int 타입으로 전달
+              price: stock.currentPrice,
               changeRate: stock.changeRate,
             ),
           ),
@@ -315,9 +458,21 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
   }
 
   Widget _buildMyStocksTab() {
-    return _isLoadingMyStocks
-        ? const Center(child: CircularProgressIndicator())
-        : ListView.builder(
+    if (_isLoadingMyStocks) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_myStocks.isEmpty) {
+      return const Center(
+        child: Text(
+          '보유하거나 관심있는 주식이 없습니다.\n종목을 추가해보세요!',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
+
+    return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 16.0),
       itemCount: _myStocks.length,
       itemBuilder: (context, index) {
@@ -328,8 +483,9 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
             rank: stock.rank.toString(),
             logoPath: stock.imageUrl ?? '',
             name: stock.name,
-            price: '${stock.currentPrice}원',
-            change: '${stock.changeRate.toStringAsFixed(1)}%',
+            // 🔄 [수정] 모델의 실시간 데이터를 직접 사용하도록 변경
+            price: '${stock.currentPrice.toInt()}원',
+            change: '${stock.changeRate.toStringAsFixed(2)}%',
             prediction: stock.prediction ?? '',
             newsCount: stock.newsCount ?? 0,
           ),

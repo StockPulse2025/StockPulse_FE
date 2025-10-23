@@ -1,67 +1,38 @@
 import 'package:flutter/material.dart';
 import '../../models/news_model.dart';
-import '../../services/api_service.dart';
 
-class NewsCard extends StatefulWidget {
+class NewsCard extends StatelessWidget {
   final News news;
   final EdgeInsetsGeometry? margin;
+  final VoidCallback onBookmarkToggle; // 북마크 토글 이벤트를 처리할 콜백
 
   const NewsCard({
     super.key,
     required this.news,
+    required this.onBookmarkToggle,
     this.margin,
   });
 
   @override
-  State<NewsCard> createState() => _NewsCardState();
-}
-
-class _NewsCardState extends State<NewsCard> {
-  late bool _isBookmarked;
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  Future<void> _toggleBookmark() async {
-   final originalBookmarkStatus = widget.news.isBookmarked;
-    setState(() {
-      widget.news.isBookmarked = !widget.news.isBookmarked;
-    });
-
-    try {
-      final newStatus = await ApiService().updateBookmarkStatus(widget.news.newsId);
-      if (mounted) {
-        setState(() {
-          widget.news.isBookmarked = newStatus;
-        });
-      }
-    } catch (e) {
-      // 에러 발생 시 원상 복구
-      if (mounted) {
-        setState(() {
-          widget.news.isBookmarked = originalBookmarkStatus;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('북마크 저장에 실패했습니다.')),
-        );
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final news = widget.news;
+
+    print('--- NewsCard Data ---');
+    print('종목명: "${news.companyName}"');
+    print('---------------------');
+
     const Color positiveColor = Color(0xFFF04E52);
     const Color negativeColor = Color(0xFF3687F6);
-    bool isPriceUp = (double.tryParse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) ?? 0) > 0;
+    // 주가 등락률 파싱 (숫자, '.', '-' 제외한 문자 모두 제거)
+    final priceChangeStr = news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '');
+    final isPriceUp = (double.tryParse(priceChangeStr) ?? 0) > 0;
+    // 주식 관련 정보가 있는지 확인 (종목명이 비어있지 않은 경우로 판단)
+    final bool hasStockInfo = news.companyName.isNotEmpty;
 
     return Stack(
       children: [
         Container(
           padding: const EdgeInsets.all(16.0),
-          margin: widget.margin ?? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          margin: margin ?? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -110,35 +81,39 @@ class _NewsCardState extends State<NewsCard> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          CircleAvatar(
-                            radius: 10,
-                            backgroundColor: Colors.transparent,
-                            child: ClipOval(
-                              child: news.companyLogo.isNotEmpty
-                                  ? Image.network(
-                                news.companyLogo,
-                                width: 20,
-                                height: 20,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Text(news.companyName.substring(0, 1)),
-                              )
-                                  : const SizedBox.shrink(),
+                          // 주식 정보가 있을 때만 로고와 가격 정보를 표시
+                          if (hasStockInfo) ...[
+                            const SizedBox(width: 8),
+                            CircleAvatar(
+                              radius: 10,
+                              backgroundColor: Colors.transparent,
+                              child: ClipOval(
+                                child: news.companyLogo.isNotEmpty
+                                    ? Image.network(
+                                  news.companyLogo,
+                                  width: 20,
+                                  height: 20,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Text(news.companyName.substring(0, 1)),
+                                )
+                                    : const SizedBox.shrink(),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Text(news.companyName, style: const TextStyle(color: Color(0xFF585858), fontWeight: FontWeight.bold, fontSize: 11)),
-                                const SizedBox(width: 4),
-                                Text(news.currentPrice, style: const TextStyle(color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold, fontSize: 9)),
-                                const SizedBox(width: 4),
-                                Text(news.priceChange, style: TextStyle(color: isPriceUp ? positiveColor : negativeColor, fontWeight: FontWeight.bold, fontSize: 9)),
-                              ],
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Flexible(child: Text(news.companyName, style: const TextStyle(color: Color(0xFF585858), fontWeight: FontWeight.bold, fontSize: 11), overflow: TextOverflow.ellipsis)),
+                                  const SizedBox(width: 4),
+                                  Text(news.currentPrice, style: const TextStyle(color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold, fontSize: 9)),
+                                  const SizedBox(width: 4),
+                                  Text(news.priceChange, style: TextStyle(color: isPriceUp ? positiveColor : negativeColor, fontWeight: FontWeight.bold, fontSize: 9)),
+                                ],
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -154,7 +129,7 @@ class _NewsCardState extends State<NewsCard> {
                   ),
                 ),
               ),
-              const SizedBox(width: 24),
+              const SizedBox(width: 24), // 북마크 아이콘과의 간격
             ],
           ),
         ),
@@ -165,36 +140,38 @@ class _NewsCardState extends State<NewsCard> {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             icon: Icon(
-              widget.news.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-              color: widget.news.isBookmarked ? const Color(0xFF2B3A66) : Colors.grey,
+              news.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: news.isBookmarked ? const Color(0xFF2B3A66) : Colors.grey,
               size: 24,
             ),
-            onPressed: _toggleBookmark,
+            onPressed: onBookmarkToggle, // 콜백 함수 호출
           ),
         ),
-        Positioned(
-          bottom: 24,
-          right: 32,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: news.isPredictionPositive ? const Color(0xFFF9B8B0) : const Color(0xFF95C1FF),
-              borderRadius: BorderRadius.circular(5.0),
-            ),
-            child: RichText(
-              text: TextSpan(
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Pretendard'),
-                children: [
-                  const TextSpan(text: '예측주가 ', style: TextStyle(color: Colors.black)),
-                  TextSpan(
-                    text: news.prediction,
-                    style: TextStyle(color: news.isPredictionPositive ? const Color(0xFFFF0000) : const Color(0xFF0042FF)),
-                  ),
-                ],
+        // 예측주가 정보가 있을 때만 표시
+        if (news.prediction.isNotEmpty)
+          Positioned(
+            bottom: 24,
+            right: 32,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: news.isPredictionPositive ? const Color(0xFFF9B8B0) : const Color(0xFF95C1FF),
+                borderRadius: BorderRadius.circular(5.0),
+              ),
+              child: RichText(
+                text: TextSpan(
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Pretendard'),
+                  children: [
+                    const TextSpan(text: '예측주가 ', style: TextStyle(color: Colors.black)),
+                    TextSpan(
+                      text: news.prediction,
+                      style: TextStyle(color: news.isPredictionPositive ? const Color(0xFFFF0000) : const Color(0xFF0042FF)),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

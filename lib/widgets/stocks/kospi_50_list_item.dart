@@ -1,5 +1,3 @@
-// kospi_50_list_item.dart (전체 코드 교체)
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // 숫자 포맷팅을 위해 intl 패키지 import
 import 'package:stockpulse2/services/api_service.dart';
@@ -11,8 +9,8 @@ class Kospi50ListItem extends StatefulWidget {
   final String rank;
   final String name;
   final String logoPath;
-  final int price; // [수정] String -> int
-  final double changeRate; // [수정] String -> double
+  final double price;
+  final double changeRate;
 
   final EdgeInsetsGeometry? contentPadding;
 
@@ -25,7 +23,7 @@ class Kospi50ListItem extends StatefulWidget {
     required this.logoPath,
     required this.name,
     required this.price,
-    required this.changeRate, // [수정] change -> changeRate
+    required this.changeRate,
     this.contentPadding,
   });
 

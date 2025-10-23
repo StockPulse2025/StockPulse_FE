@@ -4,8 +4,8 @@ class Stock {
   final String name;
   final String symbol;
   final String? imageUrl;
-  final int currentPrice;
-  final double changeRate;
+  double currentPrice;
+  double changeRate;
   final double changeAmount;
   final int? tradingValue;
   final int? tradingVolume;
@@ -34,25 +34,31 @@ class Stock {
   });
 
   factory Stock.fromJson(Map<String, dynamic> json) {
-    // prediction API의 응답 필드(predictInfluenceScore, relatedIssueCount)를 매핑
+    double parseToDouble(dynamic value) {
+      if (value is int) {
+        return value.toDouble();
+      } else if (value is double) {
+        return value;
+      } else {
+        return 0.0;
+      }
+    }
+
     return Stock(
       rank: json['rank'] ?? 0,
       stockId: json['stockId'] ?? 0,
-      // 'name'과 'stockName' 두 가지 키로 들어올 수 있으므로 모두 처리
       name: json['name'] ?? json['stockName'] ?? '',
       symbol: json['symbol'] ?? '',
       imageUrl: json['imageUrl'],
-      currentPrice: json['currentPrice'] ?? 0,
-      changeRate: (json['changeRate'] ?? 0).toDouble(),
-      changeAmount: (json['changeAmount'] ?? 0).toDouble(),
+      currentPrice: parseToDouble(json['currentPrice']),
+      changeRate: parseToDouble(json['changeRate']),
+      changeAmount: parseToDouble(json['changeAmount']),
       tradingValue: json['tradingValue'],
       tradingVolume: json['tradingVolume'],
       favorite: json['favorite'] ?? false,
       owned: json['owned'] ?? false,
-      // 'prediction'은 'predictInfluenceScore'를 문자열로 변환하여 사용
       prediction: json['predictInfluenceScore']?.toString(),
-      predictInfluenceScore: (json['predictInfluenceScore'] ?? 0).toDouble(),
-      // 'newsCount'는 'relatedIssueCount'를 사용
+      predictInfluenceScore: parseToDouble(json['predictInfluenceScore']),
       newsCount: json['newsCount'] ?? json['relatedIssueCount'],
     );
   }

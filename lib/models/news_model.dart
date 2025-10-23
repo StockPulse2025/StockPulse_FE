@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 class News {
   final int newsId;
   final String newsImage;
@@ -31,15 +33,16 @@ class News {
 
   // 백엔드 응답(NewsDTO)을 News 모델로 변환하는 팩토리 생성자
   factory News.fromJson(Map<String, dynamic> json) {
-    // API 응답에 stockInfo 객체가 있는지 확인
-    final bool hasStockInfo = json.containsKey('stockInfo') &&
-        json['stockInfo'] != null;
-    final stockInfo = hasStockInfo
-        ? json['stockInfo']
-        : json; // stockInfo가 없으면 json 본체를 사용
+    final Map<String, dynamic> sourceForStockData;
+    if (json.containsKey('stockInfo') && json['stockInfo'] is Map<String, dynamic>) {
+      sourceForStockData = json['stockInfo'];
+    } else {
+      sourceForStockData = json;
+    }
 
     final sentiment = (json['sentiment'] ?? '').toString().toUpperCase();
-    final influenceScore = (json['influenceScore'] ?? 0.0).toDouble();
+
+    final influenceScore = (sourceForStockData['influenceScore'] ?? 0.0).toDouble();
 
     String formattedDate = '';
     if (json['publishedDate'] != null) {
@@ -56,17 +59,40 @@ class News {
     String predictionText = influenceScore > 0 ? "+${influenceScore
         .toStringAsFixed(2)}%" : "${influenceScore.toStringAsFixed(2)}%";
 
+    double priceChangeValue = (sourceForStockData['priceChange'] ?? 0.0).toDouble();
+    String priceChangeText = priceChangeValue > 0
+        ? "+${priceChangeValue.toStringAsFixed(2)}%"
+        : "${priceChangeValue.toStringAsFixed(2)}%";
+
+
+    String formattedCurrentPrice = '0'; // 기본값
+    final priceValue = sourceForStockData['currentPrice'];
+    if (priceValue != null) {
+       num priceNum = 0;
+      if (priceValue is num) {
+        priceNum = priceValue;
+      } else if (priceValue is String) {
+        priceNum = num.tryParse(priceValue) ?? 0;
+      }
+
+     final formatter = NumberFormat('#,###');
+      formattedCurrentPrice = formatter.format(priceNum.toInt());
+    }
+
+
     return News(
-      newsId: json['newsId'] ?? 0,
+     newsId: json['newsId'] ?? 0,
       newsImage: json['newsImage'] ?? '',
       newsTitle: json['newsTitle'] ?? '',
       dateSource: "${json['press'] ?? '정보 없음'} | $formattedDate",
       isBookmarked: json['scrapped'] ?? false,
       isGoodNews: sentiment == 'POSITIVE',
-      companyLogo: json['stockImage'] ?? '',
-      companyName: json['stockName'] ?? '',
-      currentPrice: json['currentPrice']?.toString() ?? '0', // API 응답에 없으면 계속 '0'
-      priceChange: json['priceChange']?.toString() ?? '0',   // API 응답에 없으면 계속 '0'
+
+      companyLogo: sourceForStockData['stockImage'] ?? '',
+      companyName: sourceForStockData['stockName'] ?? '',
+
+      currentPrice: formattedCurrentPrice,
+      priceChange: priceChangeText,
 
       // influenceScore로 계산된 값들
       isPredictionPositive: influenceScore >= 0,

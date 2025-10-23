@@ -625,18 +625,27 @@ class ApiService {
     }
   }
 
-  // 2. [수정] 내 종목 조회 API (GET /api/v1/stocks/mine)
-  // - 기존 fetchMyStocks 함수를 유지하되, Swagger에 명시된 prediction API와 구분합니다.
-  // - Swagger에는 '내 주식' 목록을 직접 가져오는 API가 명시되지 않아, 기존 코드를 유지합니다.
-  //   만약 이 기능이 prediction API로 대체되어야 한다면 fetchPredictionStocks(myStockType: 'ALL')을 사용해야 합니다.
+  // 2. 내 종목 조회 API (GET /api/v1/stocks/prediction)
   Future<List<Stock>> fetchMyStocks() async {
     try {
-      final response = await _dio.get('/api/v1/stocks/mine');
-      if (response.statusCode == 200 && response.data['isSuccess']) {
-        return (response.data['result'] as List).map((json) =>
-            Stock.fromJson(json)).toList();
+      final res = await _dio.get(
+        '/api/v1/stocks/prediction',
+        queryParameters: {'myStockType': 'ALL'},
+      );
+      print('내 종목 예측 데이터 응답: ${res.data}');
+
+      if (res.statusCode == 200 && res.data['isSuccess']) {
+        final resultList = res.data['result'] as List;
+
+        // 각 결과 항목에 'owned'와 'favorite' 필드가 있는지 체크
+        for (var item in resultList) {
+          print('보유: ${item['owned']}, 관심: ${item['favorite']}');
+        }
+
+        return resultList.map((json) => Stock.fromJson(json)).toList();
       }
-      throw Exception('내 주식 데이터 조회 실패: ${response.data['message']}');
+
+      throw Exception('내 주식 데이터 조회 실패: ${res.data['message']}');
     } on DioException catch (e) {
       throw Exception('내 주식 데이터 API 호출 실패: ${e.response?.data ?? e.message}');
     }

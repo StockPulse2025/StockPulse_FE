@@ -21,6 +21,12 @@ import '../models/user_model.dart'; // 사용자 모델
 import 'package:provider/provider.dart';
 import '../providers/user_provider.dart';
 
+import '../screens/news/news_detail_screen.dart';
+import '../screens/stocks/stock_detail_screen.dart';
+
+import 'package:stomp_dart_client/stomp_dart_client.dart';
+import 'dart:convert';
+
 class HomeScreen extends StatefulWidget {
   final int initialIndex;
   const HomeScreen({super.key, this.initialIndex = 0});
@@ -125,6 +131,11 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
   late Future<List<Stock>> topStocksFuture; // 예측 TOP5 주식 데이터를 가져올 Future
   late String _currentUserName;
 
+  Map<String, Stock> top5StocksMap = {};
+  StompClient? stompClient;
+
+  final ApiService apiService = ApiService();
+
   @override
   void initState() {
     super.initState();
@@ -160,6 +171,63 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
     }
 
     setState(() {}); // FutureBuilder가 다시 빌드될 수 있도록 트리거
+  }
+
+  void _connectWebSocketToTop5(List<Stock> stocks) {
+    // 기존 연결 있으면 비활성화
+    if (stompClient != null && stompClient!.isActive) {
+      stompClient!.deactivate();
+    }
+    top5StocksMap.clear();
+
+    stompClient = StompClient(
+      config: StompConfig(
+        url: 'ws://stockpulse.p-e.kr/ws-stock',
+        onConnect: (frame) {
+          for (final stock in stocks) {
+            final symbol = stock.symbol;
+            if (symbol.isNotEmpty) {
+              top5StocksMap[symbol] = stock;
+              stompClient!.subscribe(
+                destination: '/sub/$symbol',
+                callback: (frame) {
+                  final data = jsonDecode(frame.body!);
+                  setState(() {
+                    final s = top5StocksMap[data['symbol']];
+                    if (s != null) {
+                      s.currentPrice = (data['currentPrice'] ?? s.currentPrice).toDouble();
+                      s.changeRate = (data['changeRate'] ?? s.changeRate).toDouble();
+                    }
+                  });
+                },
+              );
+            }
+          }
+        },
+        onWebSocketError: (error) => print('웹소켓 오류: $error'),
+        onDisconnect: (frame) => print('웹소켓 연결 종료'),
+      ),
+    );
+    stompClient!.activate();
+  }
+
+
+  // 뉴스 상세 화면으로 이동하는 함수
+  void _navigateToNewsDetail(int newsId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => NewsDetailScreen(newsId: newsId),
+      ),
+    );
+  }
+
+  // 주식 상세 화면으로 이동하는 함수
+  void _navigateToStockDetail(String stockId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => StockDetailScreen(stockId: int.parse(stockId)),
+      ),
+    );
   }
 
   // 퀵메뉴 아이템을 생성하는 헬퍼 위젯
@@ -335,7 +403,10 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
                           child: Text('표시할 뉴스가 없습니다.'),
                         ));
                       }
-                      return HomeNewsSection(newsList: newsList);
+                      return HomeNewsSection(
+                        newsList: newsList,
+                        onNewsTap: (newsId) => _navigateToNewsDetail(newsId),
+                      );
                     },
                   ),
                   const SizedBox(height: 30),
@@ -373,7 +444,10 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
                           child: Text('표시할 TOP 5 주식이 없습니다.'),
                         ));
                       }
-                      return HomeTop5Section(stockList: stockList);
+                      return HomeTop5Section(
+                        stockList: stockList,
+                        onStockTap: (stockId) => _navigateToStockDetail(stockId),
+                      );
                     },
                   ),
                   const SizedBox(height: 24),

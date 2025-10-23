@@ -3,8 +3,13 @@ import '../../models/stock_model.dart';
 
 class HomeTop5Section extends StatelessWidget {
   final List<Stock> stockList;
+  final Function(String) onStockTap;
 
-  const HomeTop5Section({required this.stockList, Key? key}) : super(key: key);
+  const HomeTop5Section({
+    required this.stockList,
+    required this.onStockTap,
+    Key? key,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -30,19 +35,23 @@ class HomeTop5Section extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
+          const SizedBox(height: 16),
+
           ...stockList.asMap().entries.map((entry) {
             final index = entry.key;
             final stock = entry.value;
 
-            return _buildTop5Item(
-                (index + 1).toString(), // 1부터 5까지 순위 표시
-                stock.name,
-                '${addComma(stock.currentPrice.toString())}원',
-                '${stock.changeRate >= 0 ? '+' : ''}${stock.changeRate.toStringAsFixed(2)}%',
-                '${stock.predictInfluenceScore >= 0 ? '+' : ''}${stock.predictInfluenceScore.toStringAsFixed(2)}%',
-                0,
-                stock.imageUrl ?? 'https://default-image-url.com/default.png'
-
+            return GestureDetector(
+              onTap: () => onStockTap(stock.stockId.toString()),
+              child: _buildTop5Item(
+                  (index + 1).toString(),
+                  stock.name,
+                  '${addComma(stock.currentPrice.toString())}원',
+                  '${stock.changeRate >= 0 ? '+' : ''}${stock.changeRate.toStringAsFixed(2)}%',
+                  '${stock.predictInfluenceScore >= 0 ? '+' : ''}${stock.predictInfluenceScore.toStringAsFixed(2)}%',
+                  stock.newsCount ?? 0, // newsCount가 null일 경우 0으로 처리
+                  stock.imageUrl ?? '' // imageUrl이 null일 경우 빈 문자열 처리
+              ),
             );
           }).toList(),
         ],

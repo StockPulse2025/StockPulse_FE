@@ -4,6 +4,9 @@ import '../../widgets/stocks/my_stock_list_item.dart';
 import '../../services/api_service.dart';
 import '../stocks/stock_detail_screen.dart';
 
+import 'package:stomp_dart_client/stomp_dart_client.dart';
+import 'dart:convert';
+
 class HoldingsScreen extends StatefulWidget {
   const HoldingsScreen({super.key});
 
@@ -15,6 +18,9 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
   final ApiService apiService = ApiService();
   List<Stock> holdings = [];
   bool isLoading = true;
+
+  Map<String, Stock> holdingsMap = {};
+  StompClient? stompClient;
 
   @override
   void initState() {
@@ -31,6 +37,7 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
         setState(() {
           holdings = result;
           isLoading = false;
+          _connectWebSocketToHoldings(holdings);
         });
       }
     } catch (e) {
@@ -43,6 +50,49 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
         const SnackBar(content: Text('보유 종목을 불러오는데 실패했습니다.')),
       );
     }
+  }
+
+  void _connectWebSocketToHoldings(List<Stock> stocks) {
+    if (stompClient != null && stompClient!.isActive) {
+      stompClient!.deactivate();
+    }
+    holdingsMap.clear();
+
+    stompClient = StompClient(
+      config: StompConfig(
+        url: 'ws://stockpulse.p-e.kr/ws-stock',
+        onConnect: (frame) {
+          for (final stock in stocks) {
+            final symbol = stock.symbol;
+            if (symbol.isNotEmpty) {
+              holdingsMap[symbol] = stock;
+              stompClient!.subscribe(
+                destination: '/sub/$symbol',
+                callback: (frame) {
+                  final data = jsonDecode(frame.body!);
+                  setState(() {
+                    final s = holdingsMap[data['symbol']];
+                    if (s != null) {
+                      s.currentPrice = (data['currentPrice'] ?? s.currentPrice).toDouble();
+                      s.changeRate = (data['changeRate'] ?? s.changeRate).toDouble();
+                    }
+                  });
+                },
+              );
+            }
+          }
+        },
+        onWebSocketError: (error) => print('웹소켓 오류: $error'),
+        onDisconnect: (frame) => print('웹소켓 연결 종료'),
+      ),
+    );
+    stompClient!.activate();
+  }
+
+  @override
+  void dispose() { // 페이지 종료 시 웹소켓 비활성화
+    stompClient?.deactivate();
+    super.dispose();
   }
 
   Map<String, List<Stock>> groupStocksByFirstLetter(List<Stock> stocks) {

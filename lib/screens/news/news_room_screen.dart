@@ -13,24 +13,46 @@ class NewsRoomScreen extends StatefulWidget {
 }
 
 class _NewsRoomScreenState extends State<NewsRoomScreen> {
-  // 메인 뉴스와 뉴스 목록을 별도의 Future로 관리
-  late Future<News> mainNewsFuture;
-  late Future<List<News>> newsListFuture;
+  final ApiService _apiService = ApiService();
+  News? _mainNews;
+  List<News>? _newsList;
+  String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
-    // 두 API를 동시에 호출
-    mainNewsFuture = ApiService().fetchMainNews();
-    newsListFuture = ApiService().fetchNewsWithFilter();
+    _refreshNews();
   }
 
-  // 데이터를 새로고침하는 함수
-  void _refreshNews() {
+  Future<void> _refreshNews({Map<String, dynamic>? filter}) async {
     setState(() {
-      mainNewsFuture = ApiService().fetchMainNews();
-      newsListFuture = ApiService().fetchNewsWithFilter();
+      // 로딩 상태로 초기화
+      _mainNews = null;
+      _newsList = null;
+      _errorMessage = '';
     });
+
+    try {
+      // 메인 뉴스와 필터링된 뉴스 목록을 동시에 요청
+      final results = await Future.wait([
+        _apiService.fetchMainNews(),
+        _apiService.fetchNewsWithFilter(
+          sort: filter?['sort'] ?? 'LATEST',
+          allStock: filter?['allStock'] ?? true,
+          ownedStock: filter?['ownedStock'] ?? false,
+          favoriteStock: filter?['favoriteStock'] ?? false,
+          industries: filter?['industries'] ?? [],
+        ),
+      ]);
+      setState(() {
+        _mainNews = results[0] as News;
+        _newsList = results[1] as List<News>;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = '뉴스 로딩에 실패했습니다: $e';
+      });
+    }
   }
 
   void _showFilter() {
@@ -40,46 +62,98 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => const FilterBottomSheet(),
     ).then((filterResult) {
-      // FilterBottomSheet가 닫히면서 필터 값을 전달하면, 해당 값으로 API를 호출
       if (filterResult != null) {
-        setState(() {
-          // 메인 뉴스는 고정, 목록만 필터링된 결과로 새로고침
-          newsListFuture = ApiService().fetchNewsWithFilter(
-            sort: filterResult['sort'],
-            allStock: filterResult['allStock'],
-            ownedStock: filterResult['ownedStock'],
-            favoriteStock: filterResult['favoriteStock'],
-            industries: filterResult['industries'],
-          );
-        });
+        // 필터 결과로 목록만 새로고침
+        _applyFilter(filterResult);
       }
     });
   }
 
-  void _navigateToDetail(News news) {
+  Future<void> _applyFilter(Map<String, dynamic> filterResult) async {
+    setState(() {
+      _newsList = null; // 목록만 로딩 상태로 변경
+    });
+    try {
+      final filteredList = await _apiService.fetchNewsWithFilter(
+        sort: filterResult['sort'],
+        allStock: filterResult['allStock'],
+        ownedStock: filterResult['ownedStock'],
+        favoriteStock: filterResult['favoriteStock'],
+        industries: filterResult['industries'],
+      );
+      setState(() {
+        _newsList = filteredList;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = '뉴스 필터링에 실패했습니다: $e';
+      });
+    }
+  }
+
+  void _navigateToDetail(int newsId) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => NewsDetailScreen(newsId: news.newsId),
+        builder: (context) => NewsDetailScreen(newsId: newsId),
       ),
     );
   }
 
-  Future<void> _toggleBookmark(News news) async {
-    final originalBookmarkStatus = news.isBookmarked; // 에러 발생 시 복구를 위해 원래 상태 저장
+  Future<void> _toggleBookmark(int newsId) async {
+    // 업데이트할 뉴스를 메인 뉴스와 목록에서 찾음
+    News? targetNews;
+    int? listIndex;
 
+    if (_mainNews?.newsId == newsId) {
+      targetNews = _mainNews;
+    }
+    if (_newsList != null) {
+      final index = _newsList!.indexWhere((news) => news.newsId == newsId);
+      if (index != -1) {
+        targetNews = _newsList![index];
+        listIndex = index;
+      }
+    }
+
+    if (targetNews == null) return;
+
+    final originalBookmarkStatus = targetNews.isBookmarked;
+
+    // UI 즉시 업데이트
     setState(() {
-      news.isBookmarked = !news.isBookmarked;
+      targetNews!.isBookmarked = !originalBookmarkStatus;
+      if (listIndex != null) {
+        _newsList![listIndex] = targetNews;
+      }
+      if (_mainNews?.newsId == newsId) {
+        _mainNews = targetNews;
+      }
     });
 
     try {
-     final newStatus = await ApiService().updateBookmarkStatus(news.newsId);
-      setState(() {
-        news.isBookmarked = newStatus;
-      });
+      final newStatus = await _apiService.updateBookmarkStatus(newsId);
+      // 서버 응답과 UI 상태가 다를 경우 서버 응답에 맞춰 동기화
+      if (targetNews.isBookmarked != newStatus) {
+        setState(() {
+          targetNews!.isBookmarked = newStatus;
+          if (listIndex != null) {
+            _newsList![listIndex] = targetNews;
+          }
+          if (_mainNews?.newsId == newsId) {
+            _mainNews = targetNews;
+          }
+        });
+      }
     } catch (e) {
-      // 에러 발생 시 상태를 원래대로
+      // 에러 발생 시 원래 상태로 복구
       setState(() {
-        news.isBookmarked = originalBookmarkStatus;
+        targetNews!.isBookmarked = originalBookmarkStatus;
+        if (listIndex != null) {
+          _newsList![listIndex] = targetNews;
+        }
+        if (_mainNews?.newsId == newsId) {
+          _mainNews = targetNews;
+        }
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -105,64 +179,40 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<News>(
-        future: mainNewsFuture,
-        builder: (context, mainNewsSnapshot) {
-          if (mainNewsSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (mainNewsSnapshot.hasError) {
-            return Center(child: Text('메인 뉴스 로드 실패: ${mainNewsSnapshot.error}'));
-          }
-          final mainNews = mainNewsSnapshot.data!;
+      body: _buildBody(),
+    );
+  }
 
-          return FutureBuilder<List<News>>(
-            future: newsListFuture,
-            builder: (context, newsListSnapshot) {
-              if (newsListSnapshot.connectionState == ConnectionState.waiting) {
-                // 메인 뉴스는 이미 로드, 목록 로딩 중에도 보여줄 수 있음
-                return SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      GestureDetector(
-                        onTap: () => _navigateToDetail(mainNews),
-                        child: _buildFeaturedNewsCard(mainNews),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Center(child: CircularProgressIndicator()),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              if (newsListSnapshot.hasError) {
-                return Center(child: Text('뉴스 목록 로드 실패: ${newsListSnapshot.error}'));
-              }
-              final newsList = newsListSnapshot.data ?? [];
+  Widget _buildBody() {
+    if (_mainNews == null || _newsList == null) {
+      if (_errorMessage.isNotEmpty) {
+        return Center(child: Text(_errorMessage));
+      }
+      return const Center(child: CircularProgressIndicator());
+    }
 
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                itemCount: newsList.length,
-                itemBuilder: (context, index) {
-                  if (index == 0) {
-                    // 메인 뉴스는 별도로 로드 완료, 이제 mainNews 변수 사용
-                    return GestureDetector(
-                      onTap: () => _navigateToDetail(mainNews),
-                      child: _buildFeaturedNewsCard(mainNews),
-                    );
-                  }
-                  if (newsList[index].newsId == mainNews.newsId) {
-                    return const SizedBox.shrink();
-                  }
-                  final newsItem = newsList[index];
-                  return GestureDetector(
-                    onTap: () => _navigateToDetail(newsItem),
-                    child: NewsCard(news: newsItem),
-                  );
-                },
-              );
-            },
+    // 메인 뉴스가 목록에 중복으로 나타나지 않도록 필터링
+    final displayList = _newsList!.where((news) => news.newsId != _mainNews!.newsId).toList();
+
+    return RefreshIndicator(
+      onRefresh: _refreshNews,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        itemCount: displayList.length + 1, // 메인 뉴스 카드 포함
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return GestureDetector(
+              onTap: () => _navigateToDetail(_mainNews!.newsId),
+              child: _buildFeaturedNewsCard(_mainNews!),
+            );
+          }
+          final newsItem = displayList[index - 1];
+          return GestureDetector(
+            onTap: () => _navigateToDetail(newsItem.newsId),
+            child: NewsCard(
+              news: newsItem,
+              onBookmarkToggle: () => _toggleBookmark(newsItem.newsId),
+            ),
           );
         },
       ),
@@ -172,7 +222,9 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
   Widget _buildFeaturedNewsCard(News news) {
     const Color positiveColor = Color(0xFFF04E52);
     const Color negativeColor = Color(0xFF3687F6);
-    bool isPriceUp = (double.tryParse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) ?? 0) > 0;
+    final priceChangeStr = news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '');
+    bool isPriceUp = (double.tryParse(priceChangeStr) ?? 0) > 0;
+    final bool hasStockInfo = news.companyName.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16.0),
@@ -201,43 +253,44 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
               ),
             ),
           ),
-          Positioned(
-            top: 10,
-            left: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: news.isPredictionPositive ? const Color(0xFFF9B8B0) : const Color(0xFF95C1FF),
-                borderRadius: BorderRadius.circular(5.0),
-              ),
-              child: RichText(
-                text: TextSpan(
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Pretendard'),
-                  children: [
-                    const TextSpan(
-                      text: '예측주가 ',
-                      style: TextStyle(color: Colors.black),
-                    ),
-                    TextSpan(
-                      text: news.prediction,
-                      style: TextStyle(
-                        color: news.isPredictionPositive ? const Color(0xFFFF0000) : const Color(0xFF0042FF),
+          if (news.prediction.isNotEmpty)
+            Positioned(
+              top: 10,
+              left: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: news.isPredictionPositive ? const Color(0xFFF9B8B0) : const Color(0xFF95C1FF),
+                  borderRadius: BorderRadius.circular(5.0),
+                ),
+                child: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Pretendard'),
+                    children: [
+                      const TextSpan(
+                        text: '예측주가 ',
+                        style: TextStyle(color: Colors.black),
                       ),
-                    ),
-                  ],
+                      TextSpan(
+                        text: news.prediction,
+                        style: TextStyle(
+                          color: news.isPredictionPositive ? const Color(0xFFFF0000) : const Color(0xFF0042FF),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
           Positioned(
             top: 10,
             right: 10,
             child: IconButton(
               icon: Icon(
-                  news.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                  color: news.isBookmarked ? Colors.yellow : Colors.white
+                news.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                color: news.isBookmarked ? Colors.yellow : Colors.white,
               ),
-              onPressed: () => _toggleBookmark(news),
+              onPressed: () => _toggleBookmark(news.newsId), // 수정된 부분
             ),
           ),
           Positioned(
@@ -273,34 +326,37 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      CircleAvatar(
-                        radius: 10,
-                        backgroundColor: Colors.transparent,
-                        child: ClipOval(
-                          child: news.companyLogo.isNotEmpty
-                              ? Image.network(
-                            news.companyLogo,
-                            width: 20,
-                            height: 20,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Text(news.companyName.isNotEmpty ? news.companyName.substring(0, 1) : ''),
-                          )
-                              : const SizedBox.shrink(),
+                      if (hasStockInfo) ...[
+                        const SizedBox(width: 8),
+                        CircleAvatar(
+                          radius: 10,
+                          backgroundColor: Colors.transparent,
+                          child: ClipOval(
+                            child: news.companyLogo.isNotEmpty
+                                ? Image.network(
+                              news.companyLogo,
+                              width: 20,
+                              height: 20,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Text(news.companyName.isNotEmpty ? news.companyName.substring(0, 1) : ''),
+                            )
+                                : const SizedBox.shrink(),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Text(news.companyName, style: const TextStyle(color: Color(0xFFC2C2C2), fontWeight: FontWeight.bold, fontSize: 11)),
-                            const SizedBox(width: 4),
-                            Text(news.currentPrice, style: const TextStyle(color: Color(0xFFC2C2C2), fontWeight: FontWeight.bold, fontSize: 9)),
-                            const SizedBox(width: 4),
-                            Text(news.priceChange, style: TextStyle(color: isPriceUp ? positiveColor : negativeColor, fontWeight: FontWeight.bold, fontSize: 9)),
-                          ],
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Flexible(child: Text(news.companyName, style: const TextStyle(color: Color(0xFFC2C2C2), fontWeight: FontWeight.bold, fontSize: 11), overflow: TextOverflow.ellipsis,)),
+                              const SizedBox(width: 4),
+                              Text(news.currentPrice, style: const TextStyle(color: Color(0xFFC2C2C2), fontWeight: FontWeight.bold, fontSize: 9)),
+                              const SizedBox(width: 4),
+                              Text(news.priceChange, style: TextStyle(color: isPriceUp ? positiveColor : negativeColor, fontWeight: FontWeight.bold, fontSize: 9)),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 6),
