@@ -29,19 +29,20 @@ class _NewsScrapScreenState extends State<NewsScrapScreen> {
       _errorMessage = null;
     });
     try {
-      final news = await _apiService.fetchNewsWithFilter(
-        favoriteStock: true, // 스크랩된 뉴스만 가져오도록 설정
-        allStock: false,
-      );
-      setState(() {
-        _bookmarkedNews = news;
-        _isLoading = false;
-      });
+      final news = await _apiService.fetchScrappedNews();
+      if (mounted) {
+        setState(() {
+          _bookmarkedNews = news;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = '스크랩한 뉴스를 불러오지 못했습니다.\n$e';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = '스크랩한 뉴스를 불러오지 못했습니다.\n$e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -126,8 +127,9 @@ class _NewsScrapScreenState extends State<NewsScrapScreen> {
             onTap: () => _navigateToDetail(newsItem),
             child: NewsCard(
               news: newsItem,
-              // 스크랩 화면의 뉴스 카드는 클릭 시 스크랩 해제 기능만 수행
               onBookmarkToggle: () => _unScrapNews(newsItem.newsId),
+              // 이 부분만 추가하면 됩니다.
+              showPriceInfo: false,
             ),
           );
         },

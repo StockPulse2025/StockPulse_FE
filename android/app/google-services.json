@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "214603068296",
+    "project_id": "stockpulse-fc5af",
+    "storage_bucket": "stockpulse-fc5af.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:214603068296:android:978fbc312d4206878cc03d",
+        "android_client_info": {
+          "package_name": "com.example.stockpulse2"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "214603068296-3vrnoavno8la6jkjru5e6eoi1tiqns0o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.stockpulse2",
+            "certificate_hash": "d0ba65f2d807ee38f5fdd34a160f526b77772004"
+          }
+        },
+        {
+          "client_id": "214603068296-j2qoq3fsr5ponehemsp264bclbpdq5s9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-t64ZTYZkPkIR5aWSnUD-3QbsaAd7LrY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "214603068296-j2qoq3fsr5ponehemsp264bclbpdq5s9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

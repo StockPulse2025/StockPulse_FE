@@ -4,72 +4,93 @@ import '../../services/api_service.dart';
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
   @override
-  State<NotificationSettingsScreen> createState() => _NotificationSettingsScreenState();
+  State<NotificationSettingsScreen> createState() =>
+      _NotificationSettingsScreenState();
 }
 
 class _NotificationSettingsScreenState extends State<NotificationSettingsScreen> {
+  final ApiService _apiService = ApiService();
+  bool _isLoading = true;
+
   bool _holdingsFilter = true;
   bool _watchlistFilter = false;
   bool _neutralFilter = false;
   bool _goodNewsFilter = true;
   bool _badNewsFilter = true;
-  RangeValues _goodNewsRange = const RangeValues(50, 100);
-  RangeValues _badNewsRange = const RangeValues(20, 70);
+
+  // [수정] 슬라이더 범위와 기본값을 0-5 사이로 변경
+  RangeValues _goodNewsRange = const RangeValues(2.5, 5.0);
+  RangeValues _badNewsRange = const RangeValues(1.0, 3.5);
 
   final Color navyColor = const Color(0xFF2B3A66);
   final Color sliderInactiveColor = const Color(0xFFACB0BF);
-  // final ApiService apiService = ApiService(); // ApiService 인스턴스는 필요 시에만 생성
 
-  // --- CHANGED ---
-  // 저장 기능은 백엔드 API가 준비될 때까지 임시로 처리합니다.
-  Future<void> _saveSettings() async {
-    // --- 백엔드 알림 설정 저장 API가 준비되면 아래 주석을 풀고 연결합니다. ---
-    /*
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  // [추가] 서버에서 설정 불러오기
+  Future<void> _loadSettings() async {
+    setState(() => _isLoading = true);
     try {
-      // 1. ApiService에 알림 설정을 저장하는 새로운 함수를 만들어야 합니다.
-      //    (예: ApiService().saveNotificationSettings)
-      await ApiService().saveNotificationSettings(
-        holdingsEnabled: _holdingsFilter,
-        watchlistEnabled: _watchlistFilter,
-        neutralEnabled: _neutralFilter,
-        goodNewsEnabled: _goodNewsFilter,
-        goodNewsRange: _goodNewsRange,
-        badNewsEnabled: _badNewsFilter,
-        badNewsRange: _badNewsRange,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('설정이 저장되었습니다.')));
-        Navigator.pop(context);
-      }
+      final settings = await _apiService.fetchNotificationSettings();
+      setState(() {
+        _holdingsFilter = settings['ownStock'];
+        _watchlistFilter = settings['interestStock'];
+        _goodNewsFilter = settings['goodNews'];
+        _badNewsFilter = settings['badNews'];
+        _neutralFilter = settings['neutralNews'];
+        // API(0-100) -> UI(0-5) 값 변환
+        _goodNewsRange = RangeValues(
+          (settings['goodSensitivity1'] as num).toDouble() / 20.0,
+          (settings['goodSensitivity2'] as num).toDouble() / 20.0,
+        );
+        _badNewsRange = RangeValues(
+          (settings['badSensitivity1'] as num).toDouble() / 20.0,
+          (settings['badSensitivity2'] as num).toDouble() / 20.0,
+        );
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('설정 저장에 실패했습니다: $e')));
-      }
-    }
-    */
-
-    // --- 임시 코드 ---
-    // 현재는 기능이 준비되지 않았음을 사용자에게 알립니다.
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('알림 설정 저장 기능은 현재 준비 중입니다.')),
-      );
-      // 저장이 완료된 것처럼 화면을 닫아줍니다.
-      Navigator.pop(context);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('설정 로딩 실패: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _resetFilters() {
-    setState(() {
-      _holdingsFilter = true;
-      _watchlistFilter = false;
-      _neutralFilter = false;
-      _goodNewsFilter = true;
-      _badNewsFilter = true;
-      _goodNewsRange = const RangeValues(50, 100);
-      _badNewsRange = const RangeValues(20, 70);
-    });
+  // [수정] 서버에 설정 저장하기
+  Future<void> _saveSettings() async {
+    final success = await _apiService.updateNotificationSettings(
+      ownStock: _holdingsFilter,
+      interestStock: _watchlistFilter,
+      goodNews: _goodNewsFilter,
+      badNews: _badNewsFilter,
+      neutralNews: _neutralFilter,
+      // UI(0-5) -> API(0-100) 값 변환
+      goodSensitivity1: _goodNewsRange.start * 20.0,
+      goodSensitivity2: _goodNewsRange.end * 20.0,
+      badSensitivity1: _badNewsRange.start * 20.0,
+      badSensitivity2: _badNewsRange.end * 20.0,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(success ? '설정이 저장되었습니다.' : '설정 저장에 실패했습니다.')),
+      );
+      if (success) Navigator.pop(context);
+    }
+  }
+
+  // [수정] 서버에 설정 초기화 요청
+  Future<void> _resetFilters() async {
+    final success = await _apiService.resetNotificationSettings();
+    if (success) {
+      await _loadSettings(); // 초기화 성공 시, 다시 서버에서 설정값 불러오기
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('설정이 초기화되었습니다.')));
+    } else {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('초기화에 실패했습니다.')));
+    }
   }
 
   @override
@@ -88,7 +109,9 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
         centerTitle: false,
         title: const Text('알림 설정', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
       ),
-      body: Column(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
         children: [
           Expanded(
             child: SingleChildScrollView(
@@ -197,10 +220,13 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           ),
           child: RangeSlider(
             values: values,
-            min: 0,
-            max: 100,
-            divisions: 100,
-            labels: RangeLabels(values.start.round().toString(), values.end.round().toString()),
+            min: 0.0,
+            max: 5.0,
+            divisions: 500, // (5.0 - 0.0) / 0.01 = 500
+            labels: RangeLabels(
+              values.start.toStringAsFixed(2),
+              values.end.toStringAsFixed(2),
+            ),
             onChanged: onChanged,
           ),
         ),
@@ -214,7 +240,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                     textAlign: TextAlign.center,
                     textAlignVertical: TextAlignVertical.center,
                     style: const TextStyle(fontSize: 12),
-                    controller: TextEditingController(text: values.start.round().toString()),
+                    controller: TextEditingController(text: values.start.toStringAsFixed(2)),
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       contentPadding: EdgeInsets.zero,
@@ -230,7 +256,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                     textAlign: TextAlign.center,
                     textAlignVertical: TextAlignVertical.center,
                     style: const TextStyle(fontSize: 12),
-                    controller: TextEditingController(text: values.end.round().toString()),
+                    controller: TextEditingController(text: values.end.toStringAsFixed(2)),
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       contentPadding: EdgeInsets.zero,

@@ -1,29 +1,29 @@
 import 'package:flutter/material.dart';
 
-// ApiService 임포트는 더 이상 필요 없으므로 제거해도 됩니다.
-// import '../../services/api_service.dart';
-
 class FilterBottomSheet extends StatefulWidget {
-  const FilterBottomSheet({super.key});
+  // 1. 초기 필터 값을 받을 파라미터 추가
+  final Map<String, dynamic>? initialFilters;
+
+  const FilterBottomSheet({super.key, this.initialFilters});
+
   @override
   State<FilterBottomSheet> createState() => _FilterBottomSheetState();
 }
 
 class _FilterBottomSheetState extends State<FilterBottomSheet> {
-  // 사용자가 선택하는 UI 상태값들은 그대로 유지
   String _sortOrder = '최신순';
   String _stockFilter = '전체종목';
-  final Set<String> _selectedIndustries = {'전체테마'}; // 기본값으로 '전체테마' 선택
+  final Set<String> _selectedIndustries = {'전체테마'};
   bool _neutralFilter = false;
   bool _goodNewsFilter = false;
   bool _badNewsFilter = false;
-  RangeValues _goodNewsRange = const RangeValues(0, 100);
-  RangeValues _badNewsRange = const RangeValues(0, 100);
+
+  RangeValues _goodNewsRange = const RangeValues(0.0, 5.0);
+  RangeValues _badNewsRange = const RangeValues(0.0, 5.0);
 
   final Color navyColor = const Color(0xFF2B3A66);
   final Color sliderInactiveColor = const Color(0xFFACB0BF);
 
-  // 초기화 함수
   void _resetFilters() {
     setState(() {
       _sortOrder = '최신순';
@@ -33,9 +33,52 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
       _neutralFilter = false;
       _goodNewsFilter = false;
       _badNewsFilter = false;
-      _goodNewsRange = const RangeValues(0, 100);
-      _badNewsRange = const RangeValues(0, 100);
+      _goodNewsRange = const RangeValues(0.0, 5.0);
+      _badNewsRange = const RangeValues(0.0, 5.0);
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // 2. 위젯 생성 시 전달받은 값으로 상태 초기화
+    if (widget.initialFilters != null) {
+      final filters = widget.initialFilters!;
+      _sortOrder = (filters['sort'] ?? 'LATEST') == 'LATEST' ? '최신순' : '영향도순';
+
+      if (filters['ownedStock'] == true) _stockFilter = '보유종목';
+      else if (filters['favoriteStock'] == true) _stockFilter = '관심종목';
+      else _stockFilter = '전체종목';
+
+      final List<String> industries = List<String>.from(filters['industries'] ?? []);
+      if (industries.isNotEmpty) {
+        _selectedIndustries.clear();
+        _selectedIndustries.addAll(industries);
+      } else {
+        _selectedIndustries.clear();
+        _selectedIndustries.add('전체테마');
+      }
+
+      _neutralFilter = filters['neutral'] ?? false;
+
+      final positive = filters['positive'] as Map<String, dynamic>?;
+      if (positive != null && positive['enabled'] == true) {
+        _goodNewsFilter = true;
+        _goodNewsRange = RangeValues(
+          (positive['minImpact'] as num).toDouble(),
+          (positive['maxImpact'] as num).toDouble(),
+        );
+      }
+
+      final negative = filters['negative'] as Map<String, dynamic>?;
+      if (negative != null && negative['enabled'] == true) {
+        _badNewsFilter = true;
+        _badNewsRange = RangeValues(
+          (negative['minImpact'] as num).toDouble(),
+          (negative['maxImpact'] as num).toDouble(),
+        );
+      }
+    }
   }
 
   @override
@@ -94,10 +137,18 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                       _buildSwitchTile('중립', _neutralFilter, (val) => setState(() => _neutralFilter = val)),
                       _buildSwitchTile('호재', _goodNewsFilter, (val) => setState(() => _goodNewsFilter = val)),
                       if (_goodNewsFilter)
-                        _buildRangeSlider(_goodNewsRange, (val) => setState(() => _goodNewsRange = val)),
+                        _buildRangeSlider(
+                          _goodNewsRange,
+                              (val) => setState(() => _goodNewsRange = val),
+                          isPositive: true, // 호재 슬라이더임을 표시
+                        ),
                       _buildSwitchTile('악재', _badNewsFilter, (val) => setState(() => _badNewsFilter = val)),
                       if (_badNewsFilter)
-                        _buildRangeSlider(_badNewsRange, (val) => setState(() => _badNewsRange = val)),
+                        _buildRangeSlider(
+                          _badNewsRange,
+                              (val) => setState(() => _badNewsRange = val),
+                          isPositive: false, // 악재 슬라이더임을 표시
+                        ),
                       const SizedBox(height: 50),
                     ],
                   ),
@@ -120,44 +171,38 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                 ),
               ),
               const SizedBox(width: 10),
+              const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton(
-                  // --- CHANGED ---
-                  // ApiService 호출 대신, 선택된 필터 값들을 Map으로 만들어 이전 화면으로 반환합니다.
                   onPressed: () {
-                    // 1. UI용 한글 값을 API용 영문 값으로 변환
                     String sortApiValue = _sortOrder == '최신순' ? 'LATEST' : 'IMPACT';
                     bool allStock = _stockFilter == '전체종목';
                     bool ownedStock = _stockFilter == '보유종목';
                     bool favoriteStock = _stockFilter == '관심종목';
-
-                    // '전체테마'가 선택되어 있으면 빈 리스트를 보내야 할 수 있음 (백엔드 정책 확인 필요)
                     List<String> industriesApiValue = _selectedIndustries.contains('전체테마')
                         ? []
                         : _selectedIndustries.toList();
 
-                    // 2. 반환할 Map 데이터 생성
                     final filterResult = {
                       'sort': sortApiValue,
                       'allStock': allStock,
                       'ownedStock': ownedStock,
                       'favoriteStock': favoriteStock,
                       'industries': industriesApiValue,
-                      // 민감도 필터 관련 값들도 여기에 추가해야 합니다.
                       'neutral': _neutralFilter,
                       'positive': {
                         'enabled': _goodNewsFilter,
-                        'minImpact': _goodNewsRange.start.round(),
-                        'maxImpact': _goodNewsRange.end.round(),
+                        // --- 수정된 부분: round() 제거, double 값 그대로 전달 ---
+                        'minImpact': _goodNewsRange.start,
+                        'maxImpact': _goodNewsRange.end,
                       },
                       'negative': {
                         'enabled': _badNewsFilter,
-                        'minImpact': _badNewsRange.start.round(),
-                        'maxImpact': _badNewsRange.end.round(),
+                        // --- 수정된 부분: round() 제거, double 값 그대로 전달 ---
+                        'minImpact': _badNewsRange.start,
+                        'maxImpact': _badNewsRange.end,
                       },
                     };
-
-                    // 3. Navigator.pop으로 데이터 반환
                     Navigator.pop(context, filterResult);
                   },
                   child: const Text('적용하기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
@@ -282,7 +327,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     );
   }
 
-  Widget _buildRangeSlider(RangeValues values, Function(RangeValues) onChanged) {
+  Widget _buildRangeSlider(RangeValues values, Function(RangeValues) onChanged, {required bool isPositive}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -294,10 +339,15 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
           ),
           child: RangeSlider(
             values: values,
-            min: 0,
-            max: 100,
-            divisions: 100,
-            labels: RangeLabels(values.start.round().toString(), values.end.round().toString()),
+            // --- 수정된 부분: min, max, divisions 변경 ---
+            min: 0.0,
+            max: 5.0,
+            divisions: 500, // (5 - 0) / 0.01 = 500
+            // --- 수정된 부분: 라벨 포맷 변경 ---
+            labels: RangeLabels(
+              values.start.toStringAsFixed(2),
+              values.end.toStringAsFixed(2),
+            ),
             onChanged: onChanged,
           ),
         ),
@@ -311,7 +361,8 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     textAlign: TextAlign.center,
                     textAlignVertical: TextAlignVertical.center,
                     style: const TextStyle(fontSize: 12),
-                    controller: TextEditingController(text: values.start.round().toString()),
+                    // --- 수정된 부분: 컨트롤러 텍스트 포맷 변경 ---
+                    controller: TextEditingController(text: values.start.toStringAsFixed(2)),
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       contentPadding: EdgeInsets.zero,
@@ -327,7 +378,8 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     textAlign: TextAlign.center,
                     textAlignVertical: TextAlignVertical.center,
                     style: const TextStyle(fontSize: 12),
-                    controller: TextEditingController(text: values.end.round().toString()),
+                    // --- 수정된 부분: 컨트롤러 텍스트 포맷 변경 ---
+                    controller: TextEditingController(text: values.end.toStringAsFixed(2)),
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       contentPadding: EdgeInsets.zero,

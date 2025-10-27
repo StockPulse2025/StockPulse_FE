@@ -46,11 +46,11 @@ class HomeTop5Section extends StatelessWidget {
               child: _buildTop5Item(
                   (index + 1).toString(),
                   stock.name,
-                  '${addComma(stock.currentPrice.toString())}원',
+                  '${addComma(stock.currentPrice.toInt().toString())}원',
                   '${stock.changeRate >= 0 ? '+' : ''}${stock.changeRate.toStringAsFixed(2)}%',
                   '${stock.predictInfluenceScore >= 0 ? '+' : ''}${stock.predictInfluenceScore.toStringAsFixed(2)}%',
-                  stock.newsCount ?? 0, // newsCount가 null일 경우 0으로 처리
-                  stock.imageUrl ?? '' // imageUrl이 null일 경우 빈 문자열 처리
+                  stock.newsCount ?? 0,
+                  stock.imageUrl ?? ''
               ),
             );
           }).toList(),
@@ -89,7 +89,7 @@ class HomeTop5Section extends StatelessWidget {
                 Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
                 Row(
                   children: [
-                    Text(price, style: const TextStyle(fontSize: 12)),
+                    Text(price, style: const TextStyle(fontSize: 12, color: Color(0xFF585858))),
                     const SizedBox(width: 8),
                     Text(change, style: TextStyle(fontSize: 12, color: isPriceUp ? positiveColor : negativeColor)),
                   ],

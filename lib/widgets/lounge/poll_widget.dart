@@ -1,7 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:stockpulse2/models/post_model.dart';
 
 class PollWidget extends StatefulWidget {
-  const PollWidget({super.key});
+  final VoteSummary voteSummary;
+  final bool hasVoted;
+  final String? myVoteOption; // <<--- 'BUY', 'SELL', 'HOLD'
+  final Function(int voteType) onVote;
+
+  const PollWidget({
+    super.key,
+    required this.voteSummary,
+    required this.hasVoted,
+    this.myVoteOption,
+    required this.onVote,
+  });
 
   @override
   State<PollWidget> createState() => _PollWidgetState();
@@ -9,8 +21,6 @@ class PollWidget extends StatefulWidget {
 
 class _PollWidgetState extends State<PollWidget> {
   int? _selectedIndex;
-  bool _hasVoted = false;
-  final Map<int, double> _voteResults = {0: 0.6, 1: 0.25, 2: 0.15};
   final Color navyColor = const Color(0xFF2B3A66);
 
   @override
@@ -27,11 +37,11 @@ class _PollWidgetState extends State<PollWidget> {
         children: [
           const Text('🗳️ 투표', style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-          _hasVoted ? _buildPollResults() : _buildPollOptions(),
+          widget.hasVoted ? _buildPollResults() : _buildPollOptions(),
           const SizedBox(height: 8),
-          const Text(
-            '78명 참여',
-            style: TextStyle(fontSize: 12, color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold),
+          Text(
+            '${widget.voteSummary.total}명 참여',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold),
           ),
         ],
       ),
@@ -47,7 +57,7 @@ class _PollWidgetState extends State<PollWidget> {
         _buildOptionItem(2, '기다리기'),
         const SizedBox(height: 16),
         ElevatedButton(
-          onPressed: canVote ? () => setState(() => _hasVoted = true) : null,
+          onPressed: canVote ? () => widget.onVote(_selectedIndex!) : null,
           style: ElevatedButton.styleFrom(
             backgroundColor: canVote ? navyColor : const Color(0xFFE8EBF2),
             foregroundColor: canVote ? Colors.white : Colors.black,
@@ -62,11 +72,16 @@ class _PollWidgetState extends State<PollWidget> {
   }
 
   Widget _buildPollResults() {
+    final total = widget.voteSummary.total == 0 ? 1 : widget.voteSummary.total;
+    final buyPercentage = widget.voteSummary.buy / total;
+    final sellPercentage = widget.voteSummary.sell / total;
+    final holdPercentage = widget.voteSummary.hold / total;
+
     return Column(
       children: [
-        _buildResultItem(0, '매수하기', _voteResults[0]!),
-        _buildResultItem(1, '매도하기', _voteResults[1]!),
-        _buildResultItem(2, '기다리기', _voteResults[2]!),
+        _buildResultItem(0, '매수하기', buyPercentage),
+        _buildResultItem(1, '매도하기', sellPercentage),
+        _buildResultItem(2, '기다리기', holdPercentage),
       ],
     );
   }
@@ -75,7 +90,7 @@ class _PollWidgetState extends State<PollWidget> {
     final bool isSelected = _selectedIndex == index;
     return GestureDetector(
       onTap: () => setState(() {
-        if (!_hasVoted) _selectedIndex = index;
+        if (!widget.hasVoted) _selectedIndex = index;
       }),
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
@@ -91,7 +106,15 @@ class _PollWidgetState extends State<PollWidget> {
   }
 
   Widget _buildResultItem(int index, String title, double percentage) {
-    final bool isMyChoice = _selectedIndex == index;
+    String voteOptionString = '';
+    switch (index) {
+      case 0: voteOptionString = 'BUY'; break;
+      case 1: voteOptionString = 'SELL'; break;
+      case 2: voteOptionString = 'HOLD'; break;
+    }
+    // <<--- 내가 투표한 옵션과 현재 항목이 일치하는지 확인
+    final bool isMyChoice = widget.hasVoted && widget.myVoteOption == voteOptionString;
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       height: 40,
@@ -102,6 +125,7 @@ class _PollWidgetState extends State<PollWidget> {
               Container(
                 width: constraints.maxWidth * percentage,
                 decoration: BoxDecoration(
+                  // <<--- isMyChoice에 따라 색상 변경
                   color: isMyChoice ? navyColor : const Color(0xFFACB0BF),
                   borderRadius: BorderRadius.circular(4),
                 ),
@@ -112,7 +136,11 @@ class _PollWidgetState extends State<PollWidget> {
                   padding: const EdgeInsets.symmetric(horizontal: 12.0),
                   child: Text(
                     '$title (${(percentage * 100).toStringAsFixed(0)}%)',
-                    style: TextStyle(color: isMyChoice ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      // <<--- isMyChoice에 따라 텍스트 색상 변경
+                      color: isMyChoice ? Colors.white : Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               )

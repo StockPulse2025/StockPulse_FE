@@ -4,28 +4,27 @@ import '../../models/news_model.dart';
 class NewsCard extends StatelessWidget {
   final News news;
   final EdgeInsetsGeometry? margin;
-  final VoidCallback onBookmarkToggle; // 북마크 토글 이벤트를 처리할 콜백
+  final VoidCallback onBookmarkToggle;
+  final bool showPriceInfo; // 1. 가격 표시 여부를 결정할 변수 추가
 
   const NewsCard({
     super.key,
     required this.news,
     required this.onBookmarkToggle,
     this.margin,
+    this.showPriceInfo = true, // 2. 기본값을 true로 설정
   });
 
   @override
   Widget build(BuildContext context) {
-
     print('--- NewsCard Data ---');
     print('종목명: "${news.companyName}"');
     print('---------------------');
 
     const Color positiveColor = Color(0xFFF04E52);
     const Color negativeColor = Color(0xFF3687F6);
-    // 주가 등락률 파싱 (숫자, '.', '-' 제외한 문자 모두 제거)
     final priceChangeStr = news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '');
-    final isPriceUp = (double.tryParse(priceChangeStr) ?? 0) > 0;
-    // 주식 관련 정보가 있는지 확인 (종목명이 비어있지 않은 경우로 판단)
+    final isPriceUp = (double.tryParse(priceChangeStr) ?? 0) >= 0;
     final bool hasStockInfo = news.companyName.isNotEmpty;
 
     return Stack(
@@ -81,7 +80,6 @@ class NewsCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          // 주식 정보가 있을 때만 로고와 가격 정보를 표시
                           if (hasStockInfo) ...[
                             const SizedBox(width: 8),
                             CircleAvatar(
@@ -105,11 +103,16 @@ class NewsCard extends StatelessWidget {
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  Flexible(child: Text(news.companyName, style: const TextStyle(color: Color(0xFF585858), fontWeight: FontWeight.bold, fontSize: 11), overflow: TextOverflow.ellipsis)),
-                                  const SizedBox(width: 4),
-                                  Text(news.currentPrice, style: const TextStyle(color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold, fontSize: 9)),
-                                  const SizedBox(width: 4),
-                                  Text(news.priceChange, style: TextStyle(color: isPriceUp ? positiveColor : negativeColor, fontWeight: FontWeight.bold, fontSize: 9)),
+                                  Flexible(child: Text(news.companyName, style: const TextStyle(color: Color(
+                                      0xFF232323), fontWeight: FontWeight.bold, fontSize: 11), overflow: TextOverflow.ellipsis)),
+
+                                  // 3. showPriceInfo가 true일 때만 가격과 등락률을 표시하도록 수정
+                                  if (showPriceInfo) ...[
+                                    const SizedBox(width: 4),
+                                    Text(news.currentPrice, style: const TextStyle(color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold, fontSize: 9)),
+                                    const SizedBox(width: 4),
+                                    Text(news.priceChange, style: TextStyle(color: isPriceUp ? positiveColor : negativeColor, fontWeight: FontWeight.bold, fontSize: 9)),
+                                  ],
                                 ],
                               ),
                             ),
@@ -129,7 +132,7 @@ class NewsCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 24), // 북마크 아이콘과의 간격
+              const SizedBox(width: 24),
             ],
           ),
         ),
@@ -144,10 +147,9 @@ class NewsCard extends StatelessWidget {
               color: news.isBookmarked ? const Color(0xFF2B3A66) : Colors.grey,
               size: 24,
             ),
-            onPressed: onBookmarkToggle, // 콜백 함수 호출
+            onPressed: onBookmarkToggle,
           ),
         ),
-        // 예측주가 정보가 있을 때만 표시
         if (news.prediction.isNotEmpty)
           Positioned(
             bottom: 24,

@@ -5,15 +5,21 @@ class News {
   final String newsImage;
   final String companyLogo;
   final String newsTitle;
-  final String dateSource; // 'press'와 'publishedDate'를 조합
+  final String dateSource;
   final String companyName;
-  final String currentPrice;
+  final String currentPrice; // 포매팅된 가격 문자열
   final String priceChange;
-  final bool isGoodNews; // 'sentiment' 기반으로 계산
-  final bool isPredictionPositive; // 'influenceScore' 기반으로 계산
-  final String prediction; // 'influenceScore' 기반으로 생성
-  final String? summary; // 요약은 별도 API 호출 필요
-  bool isBookmarked; // DTO의 'scrapped'에 해당
+  final bool isGoodNews;
+  final String prediction;
+  final String? summary;
+  bool isBookmarked;
+  final String? newsUrl;
+
+  // --- 추가된 필드: 아이콘 로직을 위한 원시 데이터 ---
+  final double influenceScore;
+
+  // influenceScore 기반 계산 getter
+  bool get isPredictionPositive => influenceScore >= 0;
 
   News({
     required this.newsId,
@@ -25,79 +31,74 @@ class News {
     required this.currentPrice,
     required this.priceChange,
     required this.isGoodNews,
-    required this.isPredictionPositive,
     required this.prediction,
     this.summary,
     required this.isBookmarked,
+    this.newsUrl,
+    required this.influenceScore,
   });
 
-  // 백엔드 응답(NewsDTO)을 News 모델로 변환하는 팩토리 생성자
   factory News.fromJson(Map<String, dynamic> json) {
-    final Map<String, dynamic> sourceForStockData;
-    if (json.containsKey('stockInfo') && json['stockInfo'] is Map<String, dynamic>) {
+    Map<String, dynamic> sourceForStockData = {};
+
+    if (json.containsKey('topImpactStockRank') &&
+        (json['topImpactStockRank'] as List).isNotEmpty) {
+      sourceForStockData = (json['topImpactStockRank'] as List).first;
+    } else if (json.containsKey('stockInfo') && json['stockInfo'] != null) {
       sourceForStockData = json['stockInfo'];
     } else {
       sourceForStockData = json;
     }
 
     final sentiment = (json['sentiment'] ?? '').toString().toUpperCase();
-
-    final influenceScore = (sourceForStockData['influenceScore'] ?? 0.0).toDouble();
+    final double localInfluenceScore = (sourceForStockData['influenceScore'] ??
+        0.0).toDouble();
 
     String formattedDate = '';
     if (json['publishedDate'] != null) {
       try {
         DateTime parsedDate = DateTime.parse(json['publishedDate']);
-        formattedDate =
-        "${parsedDate.year}.${parsedDate.month.toString().padLeft(
-            2, '0')}.${parsedDate.day.toString().padLeft(2, '0')}";
+        formattedDate = DateFormat('yyyy.MM.dd').format(parsedDate);
       } catch (e) {
-        formattedDate = json['publishedDate'];
+        formattedDate = '날짜 없음';
       }
     }
 
-    String predictionText = influenceScore > 0 ? "+${influenceScore
-        .toStringAsFixed(2)}%" : "${influenceScore.toStringAsFixed(2)}%";
+    String predictionText = localInfluenceScore >= 0
+        ? "+${localInfluenceScore.toStringAsFixed(2)}%"
+        : "${localInfluenceScore.toStringAsFixed(2)}%";
 
-    double priceChangeValue = (sourceForStockData['priceChange'] ?? 0.0).toDouble();
-    String priceChangeText = priceChangeValue > 0
+    double priceChangeValue = (sourceForStockData['priceChange'] ?? 0.0)
+        .toDouble();
+    String priceChangeText = priceChangeValue >= 0
         ? "+${priceChangeValue.toStringAsFixed(2)}%"
         : "${priceChangeValue.toStringAsFixed(2)}%";
 
-
-    String formattedCurrentPrice = '0'; // 기본값
+    String formattedCurrentPrice = ''; // 기본값
     final priceValue = sourceForStockData['currentPrice'];
-    if (priceValue != null) {
-       num priceNum = 0;
-      if (priceValue is num) {
-        priceNum = priceValue;
-      } else if (priceValue is String) {
-        priceNum = num.tryParse(priceValue) ?? 0;
-      }
-
-     final formatter = NumberFormat('#,###');
-      formattedCurrentPrice = formatter.format(priceNum.toInt());
+    // currentPrice가 null이 아니고, 비어있지 않은 문자열일 경우에만 포매팅
+    if (priceValue != null && priceValue.toString().isNotEmpty) {
+      num priceNum = num.tryParse(priceValue.toString()) ?? 0;
+      final formatter = NumberFormat('#,###');
+      // "원"을 여기서 추가합니다.
+      formattedCurrentPrice = '${formatter.format(priceNum.toInt())}원';
     }
 
-
     return News(
-     newsId: json['newsId'] ?? 0,
+      newsId: json['newsId'] ?? 0,
       newsImage: json['newsImage'] ?? '',
       newsTitle: json['newsTitle'] ?? '',
       dateSource: "${json['press'] ?? '정보 없음'} | $formattedDate",
       isBookmarked: json['scrapped'] ?? false,
       isGoodNews: sentiment == 'POSITIVE',
-
+      summary: json['reason'],
+      newsUrl: json['newsUrl'],
       companyLogo: sourceForStockData['stockImage'] ?? '',
       companyName: sourceForStockData['stockName'] ?? '',
-
       currentPrice: formattedCurrentPrice,
       priceChange: priceChangeText,
-
-      // influenceScore로 계산된 값들
-      isPredictionPositive: influenceScore >= 0,
       prediction: predictionText,
-      summary: json['reason'],
+      influenceScore: localInfluenceScore, // 원시 데이터 저장
     );
   }
 }

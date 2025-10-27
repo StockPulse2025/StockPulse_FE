@@ -17,6 +17,10 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
   News? _mainNews;
   List<News>? _newsList;
   String _errorMessage = '';
+  bool _isLoading = true; // 로딩 상태를 명시적으로 관리
+
+  // --- 1. 필터 상태를 관리할 변수 추가 ---
+  Map<String, dynamic>? _currentFilters;
 
   @override
   void initState() {
@@ -24,70 +28,79 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
     _refreshNews();
   }
 
-  Future<void> _refreshNews({Map<String, dynamic>? filter}) async {
+  // --- 2. _refreshNews와 _applyFilter를 통합하여 하나의 함수로 관리 ---
+  Future<void> _loadNewsData({bool isRefresh = false}) async {
     setState(() {
-      // 로딩 상태로 초기화
-      _mainNews = null;
-      _newsList = null;
+      _isLoading = true;
       _errorMessage = '';
     });
 
     try {
-      // 메인 뉴스와 필터링된 뉴스 목록을 동시에 요청
-      final results = await Future.wait([
-        _apiService.fetchMainNews(),
-        _apiService.fetchNewsWithFilter(
-          sort: filter?['sort'] ?? 'LATEST',
-          allStock: filter?['allStock'] ?? true,
-          ownedStock: filter?['ownedStock'] ?? false,
-          favoriteStock: filter?['favoriteStock'] ?? false,
-          industries: filter?['industries'] ?? [],
-        ),
-      ]);
-      setState(() {
-        _mainNews = results[0] as News;
-        _newsList = results[1] as List<News>;
-      });
+      // isRefresh가 true일 때만 메인 뉴스를 새로고침
+      final mainNewsFuture = isRefresh ? _apiService.fetchMainNews() : Future.value(_mainNews);
+
+      // 현재 필터 값을 사용하여 뉴스 목록 요청
+      final newsListFuture = _apiService.fetchNewsWithFilter(
+        sort: _currentFilters?['sort'] ?? 'LATEST',
+        allStock: _currentFilters?['allStock'] ?? true,
+        ownedStock: _currentFilters?['ownedStock'] ?? false,
+        favoriteStock: _currentFilters?['favoriteStock'] ?? false,
+        industries: List<String>.from(_currentFilters?['industries'] ?? []),
+        positiveFilter: _currentFilters?['positive'],
+        negativeFilter: _currentFilters?['negative'],
+        neutralFilter: _currentFilters?['neutral'],
+      );
+
+      final results = await Future.wait([mainNewsFuture, newsListFuture]);
+
+      if (mounted) {
+        setState(() {
+          // isRefresh일 때만 메인 뉴스 업데이트, 아닐 경우 기존 값 유지
+          if (isRefresh) {
+            _mainNews = results[0] as News?;
+          }
+          _newsList = results[1] as List<News>;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = '뉴스 로딩에 실패했습니다: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = '뉴스 로딩에 실패했습니다: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  void _showFilter() {
-    showModalBottomSheet(
+  // 화면 새로고침 (Pull-to-refresh)
+  Future<void> _refreshNews() async {
+    // 필터 초기화 후 데이터 로드
+    setState(() {
+      _currentFilters = null;
+    });
+    await _loadNewsData(isRefresh: true);
+  }
+
+  // --- 3. _showFilter 메소드 수정 ---
+  void _showFilter() async {
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => const FilterBottomSheet(),
-    ).then((filterResult) {
-      if (filterResult != null) {
-        // 필터 결과로 목록만 새로고침
-        _applyFilter(filterResult);
-      }
-    });
-  }
+      builder: (context) {
+        // 필터 시트를 열 때 현재 필터 값을 전달
+        return FilterBottomSheet(initialFilters: _currentFilters);
+      },
+    );
 
-  Future<void> _applyFilter(Map<String, dynamic> filterResult) async {
-    setState(() {
-      _newsList = null; // 목록만 로딩 상태로 변경
-    });
-    try {
-      final filteredList = await _apiService.fetchNewsWithFilter(
-        sort: filterResult['sort'],
-        allStock: filterResult['allStock'],
-        ownedStock: filterResult['ownedStock'],
-        favoriteStock: filterResult['favoriteStock'],
-        industries: filterResult['industries'],
-      );
+    if (result != null) {
+      // 사용자가 '적용하기'를 누르면, 상태를 업데이트하고 뉴스 목록만 다시 로드
       setState(() {
-        _newsList = filteredList;
+        _currentFilters = result;
       });
-    } catch (e) {
-      setState(() {
-        _errorMessage = '뉴스 필터링에 실패했습니다: $e';
-      });
+      // isRefresh를 false로 하여 메인 뉴스는 새로고침하지 않음
+      await _loadNewsData(isRefresh: false);
     }
   }
 
@@ -288,7 +301,7 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
             child: IconButton(
               icon: Icon(
                 news.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                color: news.isBookmarked ? Colors.yellow : Colors.white,
+                color: news.isBookmarked ? Color(0xFF2B3A66) : Colors.white,
               ),
               onPressed: () => _toggleBookmark(news.newsId), // 수정된 부분
             ),

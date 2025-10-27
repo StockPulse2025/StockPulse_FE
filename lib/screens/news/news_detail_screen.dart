@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-
 import 'package:stockpulse2/models/news_detail_model.dart';
 import '../lounge/create_post_screen.dart';
 import '../../models/news_model.dart';
 import '../../models/topstock_model.dart';
 import '../../services/api_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class NewsDetailScreen extends StatefulWidget {
   final int newsId;
@@ -24,10 +24,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   Future<void> _toggleBookmark(News news) async {
-    // 서버에 토글 요청
     await ApiService().updateBookmarkStatus(news.newsId);
-
-    // 요청 성공 후 화면 데이터를 새로고침
     if (mounted) {
       setState(() {
         _newsDetailFuture = ApiService().fetchNewsDetail(widget.newsId);
@@ -36,16 +33,17 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   void _showSummary(News news) async {
+    // --- 뉴스 요약 API는 이 함수에서 정상적으로 호출되고 있습니다 ---
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
-
     try {
+      // news.summary (reason) 대신 전용 API를 호출하는 현재 로직 유지
       final summaryText = await ApiService().fetchNewsSummary(news.newsId);
       if (!mounted) return;
-      Navigator.pop(context); // 로딩 다이얼로그 닫기
+      Navigator.pop(context);
 
       showModalBottomSheet(
         context: context,
@@ -56,18 +54,11 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
           padding: const EdgeInsets.all(24),
           child: SingleChildScrollView(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '뉴스 요약',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
+                const Text('뉴스 요약', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
-                Text(
-                  summaryText,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.left,
-                ),
+                Text(summaryText, style: const TextStyle(fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -75,7 +66,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // 에러 발생 시에도 로딩 다이얼로그 닫기
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("요약 정보 로드에 실패했습니다: ${e.toString()}")),
       );
@@ -84,9 +75,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
   void _navigateToDiscussion(News news) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => CreatePostScreen(newsData: news),
-      ),
+      MaterialPageRoute(builder: (context) => CreatePostScreen(newsData: news)),
     );
   }
 
@@ -96,29 +85,18 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       future: _newsDetailFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            appBar: AppBar(backgroundColor: Colors.white, surfaceTintColor: Colors.white, elevation: 1),
-            body: const Center(child: CircularProgressIndicator()),
-          );
+          return Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator()));
         }
-        if (snapshot.hasError) {
-          return Scaffold(
-            appBar: AppBar(backgroundColor: Colors.white, surfaceTintColor: Colors.white, elevation: 1),
-            body: Center(child: Text('상세 정보를 불러오지 못했습니다: ${snapshot.error}')),
-          );
-        }
-        if (!snapshot.hasData) {
-          return Scaffold(
-            appBar: AppBar(backgroundColor: Colors.white, surfaceTintColor: Colors.white, elevation: 1),
-            body: const Center(child: Text('뉴스 데이터가 없습니다.')),
-          );
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Scaffold(appBar: AppBar(), body: Center(child: Text('상세 정보를 불러오지 못했습니다: ${snapshot.error}')));
         }
 
         final newsDetail = snapshot.data!;
         final news = newsDetail.newsInfo;
+        // --- TOP 종목 API 연동 완료: newsDetail에서 topStocks를 가져옵니다 ---
         final topStocks = newsDetail.topStocks;
 
-        bool isPriceUp = (double.tryParse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) ?? 0) > 0;
+        bool isPriceUp = (double.tryParse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) ?? 0) >= 0;
         Color positiveColor = const Color(0xFFF04E52);
         Color negativeColor = const Color(0xFF3687F6);
 
@@ -136,11 +114,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
               _buildAppBarAction(Icons.article, '뉴스요약', () => _showSummary(news)),
               _buildAppBarAction(Icons.chat_bubble, '토론하기', () => _navigateToDiscussion(news)),
               IconButton(
-                icon: Icon(
-                  news.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                  color: news.isBookmarked ? const Color(0xFF2B3A66) : Colors.grey,
-                  size: 35,
-                ),
+                icon: Icon(news.isBookmarked ? Icons.bookmark : Icons.bookmark_border, color: news.isBookmarked ? const Color(0xFF2B3A66) : Colors.grey, size: 35),
                 onPressed: () => _toggleBookmark(news),
               ),
               const SizedBox(width: 8),
@@ -151,6 +125,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             children: [
               _buildHeaderImage(news, positiveColor, negativeColor, isPriceUp),
               _buildPredictionSection(news, positiveColor),
+              // topStocks 데이터를 위젯으로 전달
               _buildTopStocksSection(topStocks),
             ],
           ),
@@ -266,12 +241,22 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                       const SizedBox(width: 4),
                       Text(news.companyName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 8),
+                      // --- 1. 수정된 부분: 현재가에 "원" 추가 ---
                       Text(news.currentPrice, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 4),
                       Text(news.priceChange, style: TextStyle(color: isPriceUp ? positiveColor : negativeColor, fontSize: 12, fontWeight: FontWeight.bold)),
                     ],
                   ),
-                  const Text('원문 기사 바로가기 >', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                  if (news.newsUrl != null && news.newsUrl!.isNotEmpty)
+                    InkWell(
+                      onTap: () async {
+                        final Uri url = Uri.parse(news.newsUrl!);
+                        if (!await launchUrl(url)) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('원문 기사를 열 수 없습니다: ${news.newsUrl}')));
+                        }
+                      },
+                      child: const Text('원문 기사 바로가기 >', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
+                    ),
                 ],
               )
             ],
@@ -281,6 +266,17 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     );
   }
 
+  // --- 2. 수정된 부분: 예측 아이콘 변경 ---
+  IconData _getPredictionIcon(double score) {
+    if (score > 0) {
+      return Icons.sentiment_very_satisfied; // 웃는 아이콘
+    } else if (score < 0) {
+      return Icons.sentiment_very_dissatisfied; // 우는 아이콘
+    } else {
+      return Icons.sentiment_neutral; // 평온한 아이콘
+    }
+  }
+
   Widget _buildPredictionSection(News news, Color positiveColor) {
     bool isPredictionPositive = news.isPredictionPositive;
     Color predictionColor = isPredictionPositive ? positiveColor : const Color(0xFF3687F6);
@@ -288,14 +284,12 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(12)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.sentiment_satisfied_alt, color: Color(0xFF2B3A66), size: 20),
+          // 아이콘을 동적으로 변경
+          Icon(_getPredictionIcon(news.influenceScore), color: const Color(0xFF2B3A66), size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -353,7 +347,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
     final BoxDecoration? decoration = stock.rank == '1'
         ? BoxDecoration(
-      color: const Color(0xFFF7F9FF),
+      color: const Color(0xFFFFFFFF),
       borderRadius: BorderRadius.circular(8),
     )
         : null;
@@ -361,7 +355,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     return Container(
       decoration: decoration,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 12.0),
+        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 4.0),
         child: Row(
           children: [
             Text(stock.rank, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),

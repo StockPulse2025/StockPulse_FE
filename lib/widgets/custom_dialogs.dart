@@ -14,6 +14,7 @@ class CustomDialogs {
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
+          backgroundColor: Colors.white,
           title: const Text('닉네임 변경'),
           content: TextField(
             controller: nicknameController,
@@ -23,13 +24,25 @@ class CustomDialogs {
           ),
           actions: <Widget>[
             TextButton(
-              child: const Text('취소'),
+              child: const Text(
+                '취소',
+                style: TextStyle(
+                  color: Color(0xFF2B3A66),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               onPressed: () {
                 Navigator.of(dialogContext).pop();
               },
             ),
             TextButton(
-              child: const Text('변경'),
+              child: const Text(
+                '변경',
+                style: TextStyle(
+                  color: Color(0xFF2B3A66),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               onPressed: () async {
                 final inputNickname = nicknameController.text.trim();
                 if (inputNickname.isNotEmpty && inputNickname != currentNickname) {

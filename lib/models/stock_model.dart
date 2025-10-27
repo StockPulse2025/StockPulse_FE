@@ -34,6 +34,7 @@ class Stock {
   });
 
   factory Stock.fromJson(Map<String, dynamic> json) {
+    print('[Stock.fromJson] 서버로부터 받은 원본 데이터: $json');
     double parseToDouble(dynamic value) {
       if (value is int) {
         return value.toDouble();

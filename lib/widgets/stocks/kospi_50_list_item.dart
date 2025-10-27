@@ -13,6 +13,7 @@ class Kospi50ListItem extends StatefulWidget {
   final double changeRate;
 
   final EdgeInsetsGeometry? contentPadding;
+  final VoidCallback onToggle;
 
   const Kospi50ListItem({
     super.key,
@@ -25,6 +26,7 @@ class Kospi50ListItem extends StatefulWidget {
     required this.price,
     required this.changeRate,
     this.contentPadding,
+    required this.onToggle,
   });
 
   @override
@@ -41,6 +43,32 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
     super.initState();
     _isOwned = widget.isOwned;
     _isFavorite = widget.isFavorite;
+  }
+
+  Future<void> _toggleOwned() async {
+    // UI 즉시 반영
+    setState(() => _isOwned = !_isOwned);
+    try {
+      await apiService.toggleOwnedStock(widget.stockId);
+      widget.onToggle(); // <--- API 호출 성공 후 콜백 실행!
+    } catch (e) {
+      // 실패 시 UI 원상 복구
+      setState(() => _isOwned = !_isOwned);
+      print('보유 종목 토글 실패: $e');
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    // UI 즉시 반영
+    setState(() => _isFavorite = !_isFavorite);
+    try {
+      await apiService.toggleFavoriteStock(widget.stockId);
+      widget.onToggle(); // <--- API 호출 성공 후 콜백 실행!
+    } catch (e) {
+      // 실패 시 UI 원상 복구
+      setState(() => _isFavorite = !_isFavorite);
+      print('관심 종목 토글 실패: $e');
+    }
   }
 
   @override
@@ -83,7 +111,7 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
               width: 40,
               height: 40,
               fit: BoxFit.cover,
-              // [추가] 이미지 로딩 실패 시 에러 아이콘 표시
+              // 이미지 로딩 실패 시 에러 아이콘 표시
               errorBuilder: (context, error, stackTrace) {
                 return const Icon(Icons.error, size: 40);
               },
@@ -98,7 +126,7 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    // [수정] 포맷팅된 문자열을 Text 위젯에 전달
+                    // 포맷팅된 문자열을 Text 위젯에 전달
                     Text(formattedPrice, style: const TextStyle(color: Color(0xFF585858), fontSize: 14, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 8),
                     Text(formattedChangeRate, style: TextStyle(color: isUp ? positiveColor : negativeColor, fontSize: 14, fontWeight: FontWeight.bold)),
@@ -107,28 +135,14 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.credit_card, color: _isOwned ? const Color(0xFF2B3A66) : const Color(0xFFACB4B0)),
-            onPressed: () async {
-              try {
-                final newStatus = await apiService.toggleOwnedStock(widget.stockId);
-                setState(() => _isOwned = newStatus);
-              } catch (e) {
-                print('보유 종목 토글 실패: $e');
-              }
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.favorite, color: _isFavorite ? const Color(0xFF2B3A66) : const Color(0xFFACB4B0)),
-            onPressed: () async {
-              try {
-                final newStatus = await apiService.toggleFavoriteStock(widget.stockId);
-                setState(() => _isFavorite = newStatus);
-              } catch (e) {
-                print('관심 종목 토글 실패: $e');
-              }
-            },
-          )
+      IconButton(
+        icon: Icon(Icons.credit_card, color: _isOwned ? const Color(0xFF2B3A66) : const Color(0xFFACB4B0)),
+        onPressed: _toggleOwned,
+      ),
+      IconButton(
+        icon: Icon(Icons.favorite, color: _isFavorite ? const Color(0xFF2B3A66) : const Color(0xFFACB4B0)),
+        onPressed: _toggleFavorite,
+      )
         ],
       ),
     );

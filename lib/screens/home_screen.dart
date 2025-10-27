@@ -26,6 +26,7 @@ import '../screens/stocks/stock_detail_screen.dart';
 
 import 'package:stomp_dart_client/stomp_dart_client.dart';
 import 'dart:convert';
+import 'package:collection/collection.dart';
 
 class HomeScreen extends StatefulWidget {
   final int initialIndex;
@@ -115,10 +116,9 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _HomeContentWidget extends StatefulWidget {
- final String userName; // 사용자 닉네임
+  final String userName; // 사용자 닉네임
 
   const _HomeContentWidget({
-    super.key,
     required this.userName,
   });
 
@@ -127,20 +127,28 @@ class _HomeContentWidget extends StatefulWidget {
 }
 
 class _HomeContentWidgetState extends State<_HomeContentWidget> {
-  late Future<List<News>> newsFuture; // 최신 뉴스 데이터를 가져올 Future
-  late Future<List<Stock>> topStocksFuture; // 예측 TOP5 주식 데이터를 가져올 Future
+  late Future<List<News>> newsFuture; // 최신 뉴스 데이터는 FutureBuilder 유지
   late String _currentUserName;
 
-  Map<String, Stock> top5StocksMap = {};
-  StompClient? stompClient;
+  // ✨ [수정] TOP 5 섹션을 위한 상태 변수
+  List<Stock> _top5Stocks = [];
+  bool _isLoadingTop5 = true;
+  String? _top5Error; // 에러 메시지 저장을 위한 변수
 
+  StompClient? stompClient;
   final ApiService apiService = ApiService();
 
   @override
   void initState() {
     super.initState();
-    _currentUserName = widget.userName; // 초기 userName 설정
+    _currentUserName = widget.userName;
     _loadHomeData(); // 홈 콘텐츠 데이터 로드 시작
+  }
+
+  @override
+  void dispose() {
+    stompClient?.deactivate(); // 위젯이 사라질 때 웹소켓 연결 해제
+    super.dispose();
   }
 
   @override
@@ -153,52 +161,80 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
     }
   }
 
-  // _HomeContentWidget에 필요한 데이터를 비동기로 로드
+  // ✨ [수정] TOP 5 데이터 로딩 방식 변경
   Future<void> _loadHomeData() async {
-    final apiService = ApiService();
+    // 뉴스 로딩 (기존 방식 유지)
     newsFuture = apiService.fetchMyLatestNews();
-    topStocksFuture = apiService.fetchPredictionTop5Stocks();
 
+    // 닉네임 로딩 (기존 방식 유지)
     try {
-      final nickname = await ApiService().fetchUserNickname();
+      final nickname = await apiService.fetchUserNickname();
       if (mounted && nickname != null) {
-        setState(() {
-          _currentUserName = nickname;
-        });
+        _currentUserName = nickname;
       }
     } catch (e) {
       print('HomeContentWidget에서 사용자 닉네임 로드 실패: $e');
     }
 
-    setState(() {}); // FutureBuilder가 다시 빌드될 수 있도록 트리거
+    // TOP 5 주식 로딩
+    try {
+      final stocks = await apiService.fetchPredictionTop5Stocks();
+      if (mounted) {
+        setState(() {
+          _top5Stocks = stocks;
+          _isLoadingTop5 = false;
+        });
+        // 데이터 로드 성공 후에 웹소켓 연결
+        _connectWebSocketToTop5(_top5Stocks);
+      }
+    } catch (e) {
+      print('TOP 5 주식 로드 실패: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingTop5 = false;
+          _top5Error = 'TOP 5 주식 로드에 실패했습니다.';
+        });
+      }
+    }
+
+    // 닉네임과 뉴스 FutureBuilder 업데이트를 위해 setState 호출
+    if (mounted) {
+      setState(() {});
+    }
   }
 
+  // ✨ [수정] 웹소켓 데이터 처리 로직
   void _connectWebSocketToTop5(List<Stock> stocks) {
     // 기존 연결 있으면 비활성화
     if (stompClient != null && stompClient!.isActive) {
       stompClient!.deactivate();
     }
-    top5StocksMap.clear();
 
     stompClient = StompClient(
       config: StompConfig(
         url: 'ws://stockpulse.p-e.kr/ws-stock',
         onConnect: (frame) {
+          print('홈 화면 TOP 5 웹소켓 연결 성공!');
           for (final stock in stocks) {
             final symbol = stock.symbol;
             if (symbol.isNotEmpty) {
-              top5StocksMap[symbol] = stock;
               stompClient!.subscribe(
                 destination: '/sub/$symbol',
                 callback: (frame) {
+                  if (frame.body == null || !mounted) return;
+
                   final data = jsonDecode(frame.body!);
-                  setState(() {
-                    final s = top5StocksMap[data['symbol']];
-                    if (s != null) {
-                      s.currentPrice = (data['currentPrice'] ?? s.currentPrice).toDouble();
-                      s.changeRate = (data['changeRate'] ?? s.changeRate).toDouble();
-                    }
-                  });
+                  final receivedSymbol = data['symbol'];
+
+                  // _top5Stocks 리스트에서 직접 해당 주식을 찾아 업데이트
+                  final targetStock = _top5Stocks.firstWhereOrNull((s) => s.symbol == receivedSymbol);
+
+                  if (targetStock != null) {
+                    setState(() {
+                      targetStock.currentPrice = (data['currentPrice'] ?? targetStock.currentPrice).toDouble();
+                      targetStock.changeRate = (data['changeRate'] ?? targetStock.changeRate).toDouble();
+                    });
+                  }
                 },
               );
             }
@@ -269,6 +305,38 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
     );
   }
 
+  Widget _buildTop5Section() {
+    if (_isLoadingTop5) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 50.0),
+        child: CircularProgressIndicator(),
+      ));
+    }
+
+    if (_top5Error != null) {
+      return Center(child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 50.0, horizontal: 20.0),
+        child: Text(
+          _top5Error!,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.red),
+        ),
+      ));
+    }
+
+    if (_top5Stocks.isEmpty) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 50.0),
+        child: Text('표시할 TOP 5 주식이 없습니다.'),
+      ));
+    }
+
+    return HomeTop5Section(
+      stockList: _top5Stocks,
+      onStockTap: (stockId) => _navigateToStockDetail(stockId),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final userProvider = context.watch<UserProvider>();
@@ -297,164 +365,135 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
         ),
         actions: const [],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              color: navyColor,
-              padding: const EdgeInsets.only(bottom: 24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Transform.translate(
-                    offset: const Offset(-50.0, 0),
-                    child: Image.asset(
-                      'assets/images/stockpulse_logo_white.png',
-                      height: 60,
-                      width: 350,
+      body: RefreshIndicator(
+        onRefresh: _loadHomeData, // ✨ 새로고침 기능 추가
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                color: navyColor,
+                padding: const EdgeInsets.only(bottom: 24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Transform.translate(
+                      offset: const Offset(-50.0, 0),
+                      child: Image.asset(
+                        'assets/images/stockpulse_logo_white.png',
+                        height: 60,
+                        width: 350,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: RichText(
-                      text: TextSpan(
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Pretendard'
-                        ),
-                        children: [
-                          TextSpan(
-                            text: _currentUserName,
-                            style: const TextStyle(color: Color(0xFFFFB31A)),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Pretendard'
                           ),
-                          const TextSpan(text: '님, 반가워요!'),
+                          children: [
+                            TextSpan(
+                              text: _currentUserName,
+                              style: const TextStyle(color: Color(0xFFFFB31A)),
+                            ),
+                            const TextSpan(text: '님, 반가워요!'),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 35.0),
+                      child: Row(
+                        children: [
+                          Expanded(child: _buildQuickMenu(
+                              context, '보유종목', 'home_icon_card.png',
+                              const HoldingsScreen())),
+                          const SizedBox(width: 15),
+                          Expanded(child: _buildQuickMenu(
+                              context, '관심종목', 'home_icon_heart.png',
+                              const WatchlistScreen())),
+                          const SizedBox(width: 15),
+                          Expanded(child: _buildQuickMenu(
+                              context, '스크랩', 'home_icon_news.png',
+                              const NewsScrapScreen())),
+                          const SizedBox(width: 15),
+                          Expanded(child: _buildQuickMenu(
+                              context, '프로필', 'home_icon_person.png',
+                              const LoungeActivityScreen())),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 35.0),
-                    child: Row(
-                      children: [
-                        Expanded(child: _buildQuickMenu(
-                            context, '보유종목', 'home_icon_card.png',
-                            const HoldingsScreen())),
-                        const SizedBox(width: 15),
-                        Expanded(child: _buildQuickMenu(
-                            context, '관심종목', 'home_icon_heart.png',
-                            const WatchlistScreen())),
-                        const SizedBox(width: 15),
-                        Expanded(child: _buildQuickMenu(
-                            context, '스크랩', 'home_icon_news.png',
-                            const NewsScrapScreen())),
-                        const SizedBox(width: 15),
-                        Expanded(child: _buildQuickMenu(
-                            context, '프로필', 'home_icon_person.png',
-                            const LoungeActivityScreen())),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(10.0),
-                  topRight: Radius.circular(10.0),
+                  ],
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 20),
+              Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(10.0),
+                    topRight: Radius.circular(10.0),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 20),
 
-                  // 최신 뉴스 섹션
-                  FutureBuilder<List<News>>(
-                    future: newsFuture, // _HomeContentWidget의 newsFuture 사용
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 50.0),
-                          child: CircularProgressIndicator(),
-                        ));
-                      }
-                      if (snapshot.hasError) {
-                        return Center(child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 50.0, horizontal: 20.0),
-                          child: Text(
-                            '내 종목 최신 뉴스 로드 실패: ${snapshot.error}',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                        ));
-                      }
-                      final newsList = snapshot.data ?? [];
-                      if (newsList.isEmpty) {
-                        return const Center(child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 50.0),
-                          child: Text('표시할 뉴스가 없습니다.'),
-                        ));
-                      }
-                      return HomeNewsSection(
-                        newsList: newsList,
-                        onNewsTap: (newsId) => _navigateToNewsDetail(newsId),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 30),
-                  Container(
-                    height: 8,
-                    color: const Color(0xFFF9FAFB),
-                  ),
-                  const SizedBox(height: 20),
+                    // 최신 뉴스 섹션 (기존 FutureBuilder 유지)
+                    FutureBuilder<List<News>>(
+                      future: newsFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 50.0),
+                            child: CircularProgressIndicator(),
+                          ));
+                        }
+                        if (snapshot.hasError) {
+                          return Center(child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 50.0, horizontal: 20.0),
+                            child: Text(
+                              '내 종목 최신 뉴스 로드 실패: ${snapshot.error}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ));
+                        }
+                        final newsList = snapshot.data ?? [];
+                        if (newsList.isEmpty) {
+                          return const Center(child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 50.0),
+                            child: Text('표시할 뉴스가 없습니다.'),
+                          ));
+                        }
+                        return HomeNewsSection(
+                          newsList: newsList,
+                          onNewsTap: (newsId) => _navigateToNewsDetail(newsId),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 30),
+                    Container(
+                      height: 8,
+                      color: const Color(0xFFF9FAFB),
+                    ),
+                    const SizedBox(height: 20),
 
-                  // 주가 변동률 예측 TOP 5 섹션
-                  FutureBuilder<List<Stock>>(
-                    future: topStocksFuture, // _HomeContentWidget의 topStocksFuture 사용
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 50.0),
-                          child: CircularProgressIndicator(),
-                        ));
-                      }
-                      if (snapshot.hasError) {
-                        return Center(child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 50.0, horizontal: 20.0),
-                          child: Text(
-                            '내 종목 주가 변동률 예측 TOP 5 로드 실패: ${snapshot.error}',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                        ));
-                      }
-                      final stockList = snapshot.data ?? [];
-                      if (stockList.isEmpty) {
-                        return const Center(child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 50.0),
-                          child: Text('표시할 TOP 5 주식이 없습니다.'),
-                        ));
-                      }
-                      return HomeTop5Section(
-                        stockList: stockList,
-                        onStockTap: (stockId) => _navigateToStockDetail(stockId),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                    // ✨ [수정] 주가 변동률 예측 TOP 5 섹션
+                    _buildTop5Section(), // FutureBuilder 대신 상태 기반 위젯 호출
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

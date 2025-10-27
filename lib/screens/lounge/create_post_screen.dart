@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // 천 단위 콤마(,)를 위해 import
 import '../../models/news_model.dart';
 import 'package:stockpulse2/models/stock_model.dart';
 import '../../services/api_service.dart';
@@ -21,6 +22,7 @@ class CreatePostScreen extends StatefulWidget {
 class _CreatePostScreenState extends State<CreatePostScreen> {
   bool _showPoll = true;
   Stock? _selectedStock;
+  bool _isStockLoading = false;
   final Color navyColor = const Color(0xFF2B3A66);
 
   final TextEditingController _titleController = TextEditingController();
@@ -36,14 +38,36 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   void _navigateToStockSelection() async {
-    final result = await Navigator.push<Stock?>(
+    final basicStock = await Navigator.push<Stock?>(
       context,
       MaterialPageRoute(builder: (context) => const StockSelectionScreen()),
     );
-    if (result != null) {
-      setState(() {
-        _selectedStock = result;
-      });
+    if (basicStock == null) return;
+
+    setState(() {
+      _isStockLoading = true;
+      _selectedStock = basicStock;
+    });
+
+    try {
+      final completeStock = await apiService.fetchStockDetailsForPost(basicStock.stockId);
+      if (mounted) {
+        setState(() {
+          _selectedStock = completeStock;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('주식 정보를 불러오는 데 실패했습니다.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isStockLoading = false;
+        });
+      }
     }
   }
 
@@ -51,6 +75,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
 
+    if (title.isEmpty || content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('제목과 내용을 모두 입력해주세요.')),
+      );
+      return;
+    }
+
+    // 게시글 생성 API 호출
     final int? createdPostId = await apiService.createPost(
       newsId: widget.newsData.newsId,
       title: title,
@@ -59,33 +91,35 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       requireVote: _showPoll,
     );
 
-    if (createdPostId != null) {
+    if (createdPostId != null && mounted) {
+      // 성공 시 라운지 탭으로 이동
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const HomeScreen(initialIndex: 3)),
+        MaterialPageRoute(builder: (context) => const HomeScreen(initialIndex: 3)), // 3번 인덱스가 라운지 탭이라고 가정
             (route) => false,
       );
-
-      if (_showPoll) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-              builder: (_) => PostDetailScreen(postId: createdPostId, isPollPost: true)),
-        );
-      } else {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-              builder: (_) => PostDetailScreen(postId: createdPostId, isPollPost: false)),
-        );
-      }
-    } else {
-      // 실패 처리
+      // 생성된 게시글 상세 페이지로 바로 이동
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PostDetailScreen(
+            postId: createdPostId,
+            isPollPost: _showPoll,
+          ),
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('게시글 작성에 실패했습니다.')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
@@ -94,58 +128,61 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         titleSpacing: 0,
         centerTitle: false,
         title: const Text('게시글 작성', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        actions: const [],
-      ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildDecoratedBox(_buildNewsInfoCard()),
-                const SizedBox(height: 16),
-                _buildDecoratedBox(_buildStockSelector()),
-                const Divider(height: 32, color: Colors.transparent),
-                TextField(
-                  controller: _titleController,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                  decoration: const InputDecoration(
-                    hintText: '제목을 입력해주세요.',
-                    hintStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFE8EBF2))),
-                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFE8EBF2), width: 2.0)),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                if (_showPoll) _buildPollSection(),
-                TextField(
-                  controller: _contentController,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  decoration: const InputDecoration(
-                    hintText: '내용을 입력해주세요.',
-                    hintStyle: TextStyle(color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold),
-                    border: InputBorder.none,
-                  ),
-                  maxLines: 5,
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            bottom: 24,
-            right: 24,
-            child: ElevatedButton(
+        // 4. 완료 버튼을 AppBar의 actions로 이동
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: TextButton(
               onPressed: _submitPost,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: navyColor,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white, // 배경색 흰색
               ),
-              child: const Text('완료', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+              child: Text(
+                '완료',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: navyColor, // 문구색 남색
+                ),
+              ),
             ),
           ),
         ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDecoratedBox(_buildNewsInfoCard()),
+            const SizedBox(height: 32), // 3. 종목 선택 위젯 위 여백 늘리기
+            _buildDecoratedBox(_buildStockSelector()),
+            const SizedBox(height: 16), // 3. 종목 선택 위젯 아래 여백
+            const Divider(height: 32, color: Color(0xFFE8EBF2)),
+            TextField(
+              controller: _titleController,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              decoration: const InputDecoration(
+                hintText: '제목을 입력해주세요.',
+                hintStyle: TextStyle(color: Color(0xFFBDBDBD), fontWeight: FontWeight.bold, fontSize: 18),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFE8EBF2))),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFE8EBF2), width: 2.0)),
+              ),
+            ),
+            const SizedBox(height: 32),
+            if (_showPoll) _buildPollSection(),
+            TextField(
+              controller: _contentController,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(
+                hintText: '내용을 입력해주세요.',
+                hintStyle: TextStyle(color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold),
+                border: InputBorder.none,
+              ),
+              maxLines: 5,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -156,28 +193,49 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(width: 4, color: navyColor),
+          const SizedBox(width: 12),
           Expanded(child: child),
         ],
       ),
     );
   }
 
+  // 2. 뉴스 정보 카드 디자인 변경
   Widget _buildNewsInfoCard() {
     return Container(
       padding: const EdgeInsets.all(12),
       color: const Color(0xFFF9FAFB),
       child: Row(
         children: [
-          Image.network(widget.newsData.newsImage),
+          // 이미지 크기 줄이기
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Image.network(
+              widget.newsData.newsImage,
+              width: 50,
+              height: 50,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) =>
+                  Container(width: 50, height: 50, color: Colors.grey.shade200, child: const Icon(Icons.error)),
+            ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(widget.newsData.newsTitle, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                Text(
+                  widget.newsData.newsTitle,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 4),
-                Text(widget.newsData.dateSource, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC2C2C2))),
+                Text(
+                  widget.newsData.dateSource,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC2C2C2)),
+                ),
               ],
             ),
           ),
@@ -187,43 +245,73 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Widget _buildStockSelector() {
-    final bool isUp = (_selectedStock?.changeAmount ?? 0) > 0;
+   String priceString = '';
+    String changeRateString = '';
+    bool isUp = false;
 
-    return InkWell(
-      onTap: _navigateToStockSelection,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        color: const Color(0xFFF9FAFB),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _selectedStock == null
-                ? const Text('토론할 종목을 선택해주세요', style: TextStyle(fontWeight: FontWeight.bold))
-                : Row(
-              children: [
-                CircleAvatar(
-                  backgroundImage: NetworkImage(_selectedStock!.imageUrl ?? 'https://default-image-url.com/default.png'),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_selectedStock!.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Row(
-                      children: [
-                        Text(_selectedStock!.currentPrice.toString(), style: const TextStyle(fontSize: 12)),
-                        const SizedBox(width: 4),
-                        Text(
-                          _selectedStock!.changeAmount.toString(),
-                          style: TextStyle(color: isUp ? Colors.red : Colors.blue, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+    if (_selectedStock != null) {
+      final NumberFormat priceFormat = NumberFormat('###,###,###,###');
+      priceString = '${priceFormat.format(_selectedStock!.currentPrice)}원';
+
+      final changeRate = _selectedStock!.changeRate ?? 0.0;
+      isUp = changeRate >= 0;
+      changeRateString = '${isUp ? '+' : ''}${changeRate.toStringAsFixed(2)}%';
+    }
+   return InkWell(
+     onTap: _isStockLoading ? null : _navigateToStockSelection,
+     child: Container(
+       padding: const EdgeInsets.all(12),
+       color: const Color(0xFFF9FAFB),
+       child: Row(
+         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+         children: [
+           if (_isStockLoading)
+             const SizedBox(
+               height: 24,
+               width: 24,
+               child: CircularProgressIndicator(strokeWidth: 2.0),
+             )
+           else if (_selectedStock == null)
+             const Text('토론할 종목을 선택해주세요', style: TextStyle(fontWeight: FontWeight.bold))
+           else
+             Flexible(
+               child: Row(
+                 children: [
+                   CircleAvatar(
+                     backgroundImage: _selectedStock!.imageUrl != null && _selectedStock!.imageUrl!.isNotEmpty
+                         ? NetworkImage(_selectedStock!.imageUrl!)
+                         : null,
+                     child: _selectedStock!.imageUrl == null || _selectedStock!.imageUrl!.isEmpty ? Text(_selectedStock!.name[0]) : null,
+                   ),
+                   const SizedBox(width: 8),
+                   Expanded(
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         Text(_selectedStock!.name, style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                         Row(
+                           children: [
+                             // <<--- 1. 포맷팅된 현재가 표시
+                             Text(priceString, style: const TextStyle(fontSize: 12)),
+                             const SizedBox(width: 8),
+                             // <<--- 2. 포맷팅된 변동률 표시
+                             Text(
+                               changeRateString,
+                               style: TextStyle(
+                                 color: isUp ? Colors.red : Colors.blue,
+                                 fontSize: 12,
+                               ),
+                             ),
+                           ],
+                         ),
+                       ],
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+           if (!_isStockLoading)
+             const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
           ],
         ),
       ),

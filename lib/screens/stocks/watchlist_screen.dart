@@ -3,6 +3,8 @@ import '../../models/stock_model.dart';
 import '../../widgets/stocks/my_stock_list_item.dart';
 import '../../services/api_service.dart';
 import '../stocks/stock_detail_screen.dart';
+import 'package:intl/intl.dart';
+import 'package:collection/collection.dart';
 
 import 'package:stomp_dart_client/stomp_dart_client.dart';
 import 'dart:convert';
@@ -19,7 +21,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   List<Stock> watchlist = [];
   bool isLoading = true;
 
-  Map<String, Stock> watchlistMap = {};
   StompClient? stompClient;
 
   @override
@@ -29,54 +30,62 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   }
 
   Future<void> loadWatchlist() async {
-    if (!isLoading) setState(() => isLoading = true);
+    // API 호출 시에는 isLoading을 true로 설정
+    setState(() => isLoading = true);
     try {
-      // 'FAVORITE' 타입으로 prediction API 호출
       final result = await apiService.fetchPredictionStocks(myStockType: 'FAVORITE');
       if (mounted) {
         setState(() {
           watchlist = result;
           isLoading = false;
-          _connectWebSocketToWatchlist(watchlist);
         });
+        // 데이터 로딩 성공 후 웹소켓 연결
+        _connectWebSocketToWatchlist(watchlist);
       }
     } catch (e) {
       if (mounted) {
         setState(() => isLoading = false);
       }
       print('관심 종목 조회 실패: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('관심 종목을 불러오는데 실패했습니다.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('관심 종목을 불러오는데 실패했습니다.')),
+        );
+      }
     }
   }
 
+  // 웹소켓 데이터 처리 로직 개선
   void _connectWebSocketToWatchlist(List<Stock> stocks) {
-    // 기존이 연결 되있는 경우 닫기
     if (stompClient != null && stompClient!.isActive) {
       stompClient!.deactivate();
     }
-    watchlistMap.clear();
 
     stompClient = StompClient(
       config: StompConfig(
         url: 'ws://stockpulse.p-e.kr/ws-stock',
         onConnect: (frame) {
+          print('관심종목 화면 웹소켓 연결 성공!');
           for (final stock in stocks) {
             final symbol = stock.symbol;
             if (symbol.isNotEmpty) {
-              watchlistMap[symbol] = stock;
               stompClient!.subscribe(
                 destination: '/sub/$symbol',
                 callback: (frame) {
+                  if (frame.body == null || !mounted) return;
+
                   final data = jsonDecode(frame.body!);
-                  setState(() {
-                    final s = watchlistMap[data['symbol']];
-                    if (s != null) {
-                      s.currentPrice = (data['currentPrice'] ?? s.currentPrice).toDouble();
-                      s.changeRate = (data['changeRate'] ?? s.changeRate).toDouble();
-                    }
-                  });
+                  final receivedSymbol = data['symbol'];
+
+                  // 'watchlist' 리스트에서 직접 해당 주식을 찾아 업데이트
+                  final targetStock = watchlist.firstWhereOrNull((s) => s.symbol == receivedSymbol);
+
+                  if (targetStock != null) {
+                    setState(() {
+                      targetStock.currentPrice = (data['currentPrice'] ?? targetStock.currentPrice).toDouble();
+                      targetStock.changeRate = (data['changeRate'] ?? targetStock.changeRate).toDouble();
+                    });
+                  }
                 },
               );
             }
@@ -86,13 +95,12 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
         onDisconnect: (frame) => print('웹소켓 연결 종료'),
       ),
     );
-
     stompClient!.activate();
   }
 
   @override
   void dispose() {
-    stompClient?.deactivate(); // 페이지 종료시 웹소켓 비활성화
+    stompClient?.deactivate();
     super.dispose();
   }
 
@@ -115,17 +123,19 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     return grouped;
   }
 
-
   @override
   Widget build(BuildContext context) {
     final groupedStocks = groupStocksByFirstLetter(watchlist);
     final sortedKeys = groupedStocks.keys.toList()..sort();
 
+    // 숫자 포맷터를 build 메소드 내에 생성
+    final priceFormatter = NumberFormat('#,###');
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: const Color(0xFFFFFFFF),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: const Color(0xFFF9FAFB),
+        backgroundColor: const Color(0xFFFFFFFF),
         titleSpacing: 0,
         centerTitle: false,
         title: const Text('관심종목', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -138,50 +148,58 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
           ? const Center(child: CircularProgressIndicator())
           : watchlist.isEmpty
           ? const Center(child: Text('관심 종목이 없습니다.'))
-          : ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: sortedKeys.length,
-        itemBuilder: (context, index) {
-          final key = sortedKeys[index];
-          final stocks = groupedStocks[key]!;
+          : RefreshIndicator( // 새로고침 기능 추가
+        onRefresh: loadWatchlist,
+        child: ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          itemCount: sortedKeys.length,
+          itemBuilder: (context, index) {
+            final key = sortedKeys[index];
+            final stocks = groupedStocks[key]!;
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 16, bottom: 10, left: 4),
-                child: Text(key, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
-              ),
-              Column(
-                children: stocks.map((stock) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: GestureDetector(
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => StockDetailScreen(stockId: stock.stockId),
-                          ),
-                        );
-                        loadWatchlist();
-                      },
-                      child: MyStockListItem(
-                        rank: stock.rank.toString(),
-                        logoPath: stock.imageUrl ?? '',
-                        name: stock.name,
-                        price: '${stock.currentPrice}원',
-                        change: '${stock.changeRate.toStringAsFixed(1)}%',
-                        prediction: stock.prediction ?? '',
-                        newsCount: stock.newsCount ?? 0,
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 16, bottom: 10, left: 4),
+                  child: Text(key, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
+                ),
+                Column(
+                  children: stocks.map((stock) {
+                    // 포맷팅된 가격 문자열 생성
+                    final formattedPrice = priceFormatter.format(stock.currentPrice.toInt());
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: GestureDetector(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => StockDetailScreen(stockId: stock.stockId),
+                            ),
+                          );
+                          // 상세 화면에서 돌아왔을 때 데이터 새로고침
+                          loadWatchlist();
+                        },
+                        child: MyStockListItem(
+                          rank: stock.rank.toString(),
+                          logoPath: stock.imageUrl ?? '',
+                          name: stock.name,
+                          // 포맷팅된 가격 사용
+                          price: '$formattedPrice원',
+                          change: '${stock.changeRate.toStringAsFixed(2)}%', // 소수점 두 자리로 변경
+                          prediction: stock.prediction ?? '',
+                          newsCount: stock.newsCount ?? 0,
+                        ),
                       ),
-                    ),
-                  );
-                }).toList(),
-              )
-            ],
-          );
-        },
+                    );
+                  }).toList(),
+                )
+              ],
+            );
+          },
+        ),
       ),
     );
   }

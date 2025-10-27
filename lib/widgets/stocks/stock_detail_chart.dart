@@ -8,6 +8,7 @@ class StockDetailChart extends StatelessWidget {
   final double candleWidth;
   final double xAxisInterval;
   final String selectedPeriod;
+  final ScrollController controller;
 
   const StockDetailChart({
     super.key,
@@ -16,6 +17,7 @@ class StockDetailChart extends StatelessWidget {
     required this.candleWidth,
     required this.xAxisInterval,
     required this.selectedPeriod,
+    required this.controller,
   });
 
   @override
@@ -30,8 +32,9 @@ class StockDetailChart extends StatelessWidget {
     return SizedBox(
       height: 250,
       child: SingleChildScrollView(
+        // 🔥 [수정] 전달받은 controller를 연결
+        controller: controller,
         scrollDirection: Axis.horizontal,
-        reverse: true,
         child: Container(
           width: candleData.length * (candleWidth + 8),
           child: BarChart(

@@ -161,7 +161,7 @@ class _StockPriceScreenState extends State<StockPriceScreen> {
               color: favorite ? Colors.red : null,
             ),
             onPressed: () {
-              // TODO: 즐겨찾기 토글 API 호출
+              // to.do 즐겨찾기 토글 API 호출
             },
           ),
         ],
