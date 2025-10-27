@@ -23,7 +23,6 @@ class TopStock {
     final priceValue = json['currentPrice'];
     if (priceValue != null) {
       num priceNum = num.tryParse(priceValue.toString()) ?? 0;
-      // --- 수정: "원" 추가 ---
       formattedPrice = '${NumberFormat('#,###').format(priceNum.toInt())}원';
     }
 

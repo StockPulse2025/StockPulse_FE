@@ -33,14 +33,12 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
   }
 
   void _showSummary(News news) async {
-    // --- 뉴스 요약 API는 이 함수에서 정상적으로 호출되고 있습니다 ---
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      // news.summary (reason) 대신 전용 API를 호출하는 현재 로직 유지
       final summaryText = await ApiService().fetchNewsSummary(news.newsId);
       if (!mounted) return;
       Navigator.pop(context);
@@ -93,7 +91,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
 
         final newsDetail = snapshot.data!;
         final news = newsDetail.newsInfo;
-        // --- TOP 종목 API 연동 완료: newsDetail에서 topStocks를 가져옵니다 ---
         final topStocks = newsDetail.topStocks;
 
         bool isPriceUp = (double.tryParse(news.priceChange.replaceAll(RegExp(r'[^\d.-]'), '')) ?? 0) >= 0;
@@ -125,7 +122,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
             children: [
               _buildHeaderImage(news, positiveColor, negativeColor, isPriceUp),
               _buildPredictionSection(news, positiveColor),
-              // topStocks 데이터를 위젯으로 전달
               _buildTopStocksSection(topStocks),
             ],
           ),
@@ -241,7 +237,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
                       const SizedBox(width: 4),
                       Text(news.companyName, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 8),
-                      // --- 1. 수정된 부분: 현재가에 "원" 추가 ---
                       Text(news.currentPrice, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 4),
                       Text(news.priceChange, style: TextStyle(color: isPriceUp ? positiveColor : negativeColor, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -266,7 +261,6 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
     );
   }
 
-  // --- 2. 수정된 부분: 예측 아이콘 변경 ---
   IconData _getPredictionIcon(double score) {
     if (score > 0) {
       return Icons.sentiment_very_satisfied; // 웃는 아이콘
@@ -288,7 +282,7 @@ class _NewsDetailScreenState extends State<NewsDetailScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 아이콘을 동적으로 변경
+
           Icon(_getPredictionIcon(news.influenceScore), color: const Color(0xFF2B3A66), size: 20),
           const SizedBox(width: 12),
           Expanded(

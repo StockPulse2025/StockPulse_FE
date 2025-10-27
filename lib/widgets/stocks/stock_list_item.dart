@@ -27,7 +27,7 @@ class _StockListItemState extends State<StockListItem> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isSelected) return const SizedBox.shrink(); // 해제 시 삭제
+    if (!_isSelected) return const SizedBox.shrink();
     final bool isUp = !widget.change.startsWith('-');
     Widget iconWidget = CircleAvatar(
       backgroundColor: Colors.grey,

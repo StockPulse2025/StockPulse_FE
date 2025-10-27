@@ -57,13 +57,13 @@ class SettingsScreen extends StatelessWidget {
                     const SizedBox(height: 4),
                     GestureDetector(
                       onTap: () async {
-                        // UserProvider에서 현재 닉네임 가져오기
+
                         final currentNickname = userProvider.nickname ?? '닉네임 없음';
                         await CustomDialogs.showNicknameDialog(
                           context,
                           currentNickname: currentNickname,
                           onUpdate: (updatedNickname) async {
-                            // UserProvider를 통해 닉네임 업데이트
+
                             bool success = await userProvider.updateNickname(updatedNickname);
                             if (success) {
                               if (context.mounted) {
@@ -93,7 +93,7 @@ class SettingsScreen extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              userProvider.nickname ?? '닉네임 없음', // UserProvider에서 닉네임 가져와 표시
+                              userProvider.nickname ?? '닉네임 없음',
                               style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold
@@ -116,14 +116,14 @@ class SettingsScreen extends StatelessWidget {
           _buildMenuTile(
             title: '로그아웃',
             onTap: () {
-              // CustomDialogs의 로그아웃 팝업 호출
+
               CustomDialogs.showLogoutDialog(
                 context,
                 onConfirm: () async {
-                  // 로그아웃 확인 시 API 서비스 호출
+
                   bool result = await apiService.logout();
                   if (result) {
-                    // 로그아웃 성공 시 UserProvider의 닉네임 초기화
+
                     userProvider.clearNickname();
                     if (context.mounted) {
                       Navigator.of(context).pushAndRemoveUntil(
@@ -132,7 +132,7 @@ class SettingsScreen extends StatelessWidget {
                       );
                     }
                   } else {
-                    // 로그아웃 실패 시 스낵바 표시
+
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('로그아웃에 실패했습니다.')),

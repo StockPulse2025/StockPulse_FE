@@ -30,7 +30,6 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
   }
 
   Future<void> loadHoldings() async {
-    // API 호출 시에는 isLoading을 true로 설정
     setState(() => isLoading = true);
     try {
       final result = await apiService.fetchPredictionStocks(myStockType: 'OWN');
@@ -39,7 +38,6 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
           holdings = result;
           isLoading = false;
         });
-        // 데이터 로딩 성공 후 웹소켓 연결
         _connectWebSocketToHoldings(holdings);
       }
     } catch (e) {
@@ -55,7 +53,6 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
     }
   }
 
-  // 웹소켓 데이터 처리 로직
   void _connectWebSocketToHoldings(List<Stock> stocks) {
     if (stompClient != null && stompClient!.isActive) {
       stompClient!.deactivate();
@@ -77,7 +74,6 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
                   final data = jsonDecode(frame.body!);
                   final receivedSymbol = data['symbol'];
 
-                  // 'holdings' 리스트에서 직접 해당 주식을 찾아 업데이트
                   final targetStock = holdings.firstWhereOrNull((s) => s.symbol == receivedSymbol);
 
                   if (targetStock != null) {
@@ -128,7 +124,6 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
     final groupedStocks = groupStocksByFirstLetter(holdings);
     final sortedKeys = groupedStocks.keys.toList()..sort();
 
-    // 숫자 포맷터를 build 메소드 내에 생성
     final priceFormatter = NumberFormat('#,###');
 
     return Scaffold(
@@ -148,7 +143,7 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : holdings.isEmpty
           ? const Center(child: Text('보유 중인 종목이 없습니다.'))
-          : RefreshIndicator( // 새로고침 기능 추가
+          : RefreshIndicator(
         onRefresh: loadHoldings,
         child: ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -166,7 +161,7 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
                 ),
                 Column(
                   children: stocks.map((stock) {
-                    // 가격 문자열 생성
+
                     final formattedPrice = priceFormatter.format(stock.currentPrice.toInt());
 
                     return Padding(
@@ -179,16 +174,16 @@ class _HoldingsScreenState extends State<HoldingsScreen> {
                               builder: (context) => StockDetailScreen(stockId: stock.stockId),
                             ),
                           );
-                          // 상세 화면에서 돌아왔을 때 데이터 새로고침
+
                           loadHoldings();
                         },
                         child: MyStockListItem(
                           rank: stock.rank.toString(),
                           logoPath: stock.imageUrl ?? '',
                           name: stock.name,
-                          // 포맷팅된 가격 사용
+
                           price: '$formattedPrice원',
-                          change: '${stock.changeRate.toStringAsFixed(2)}%', // 소수점 두 자리로 변경
+                          change: '${stock.changeRate.toStringAsFixed(2)}%',
                           prediction: stock.prediction ?? '',
                           newsCount: stock.newsCount ?? 0,
                         ),

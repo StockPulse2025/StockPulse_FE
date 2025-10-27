@@ -8,12 +8,10 @@ class LoungePostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // --- 1. 데이터 포맷팅 로직 ---
     final NumberFormat priceFormat = NumberFormat('###,###,###,###');
     final DateFormat dateFormat = DateFormat('yyyy.MM.dd');
     final DateFormat timeFormat = DateFormat('HH:mm');
 
-    // 가격 및 등락률
     final priceString = post.stockPrice != null ? '${priceFormat.format(post.stockPrice)}원' : ' - ';
     final changeRate = post.stockChangeRate ?? 0.0;
     final isUp = changeRate >= 0;
@@ -51,7 +49,6 @@ class LoungePostCard extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // --- 2. 제목이 남는 공간을 모두 차지하도록 Expanded로 감싸기 ---
                           Expanded(
                             child: Text(
                               post.postTitle,
@@ -62,7 +59,6 @@ class LoungePostCard extends StatelessWidget {
                           ),
                           if (post.stockName != null && post.stockName!.isNotEmpty) ...[
                             const SizedBox(width: 8),
-                            // 주식 정보 UI (오른쪽 정렬됨)
                             Row(
                               children: [
                                 CircleAvatar(
@@ -78,7 +74,6 @@ class LoungePostCard extends StatelessWidget {
                                     Text(post.stockName!, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
                                     Row(
                                       children: [
-                                        // --- 3. 포맷팅된 가격 및 등락률 표시 ---
                                         Text(priceString, style: const TextStyle(fontSize: 7, color: Color(0xFF585858), fontWeight: FontWeight.bold)),
                                         const SizedBox(width: 4),
                                         Text(
@@ -138,7 +133,7 @@ class LoungePostCard extends StatelessWidget {
               children: [
                 const Icon(Icons.article_outlined, size: 12, color: Color(0xFF585858)),
                 const SizedBox(width: 4),
-                Expanded( // 여기의 Expanded는 Column 바로 아래에 있으므로 안전합니다.
+                Expanded(
                   child: Text(
                     '${post.newsTitle!} | ${post.newsSource ?? ''}',
                     style: const TextStyle(fontSize: 11, color: Color(0xFF585858), fontWeight: FontWeight.bold),

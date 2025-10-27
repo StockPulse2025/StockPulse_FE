@@ -50,8 +50,6 @@ class _NewsScrapScreenState extends State<NewsScrapScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => NewsDetailScreen(newsId: news.newsId)),
     ).then((_) {
-      // 상세 화면에서 돌아왔을 때 목록을 새로고침하여
-      // 스크랩 상태 변경이 있었을 경우 반영
       _loadBookmarkedNews();
     });
   }
@@ -62,15 +60,15 @@ class _NewsScrapScreenState extends State<NewsScrapScreen> {
     final index = _bookmarkedNews!.indexWhere((news) => news.newsId == newsId);
     if (index == -1) return;
 
-    // 낙관적 업데이트: UI에서 먼저 제거
+
     final removedNews = _bookmarkedNews!.removeAt(index);
     setState(() {});
 
     try {
-      // API 호출하여 서버 상태 변경
+
       await _apiService.updateBookmarkStatus(newsId);
     } catch (e) {
-      // API 호출 실패 시, 제거했던 뉴스를 다시 목록에 추가
+
       setState(() {
         _bookmarkedNews!.insert(index, removedNews);
       });
@@ -128,7 +126,6 @@ class _NewsScrapScreenState extends State<NewsScrapScreen> {
             child: NewsCard(
               news: newsItem,
               onBookmarkToggle: () => _unScrapNews(newsItem.newsId),
-              // 이 부분만 추가하면 됩니다.
               showPriceInfo: false,
             ),
           );

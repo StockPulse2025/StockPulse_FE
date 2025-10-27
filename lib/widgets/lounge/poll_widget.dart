@@ -112,7 +112,6 @@ class _PollWidgetState extends State<PollWidget> {
       case 1: voteOptionString = 'SELL'; break;
       case 2: voteOptionString = 'HOLD'; break;
     }
-    // <<--- 내가 투표한 옵션과 현재 항목이 일치하는지 확인
     final bool isMyChoice = widget.hasVoted && widget.myVoteOption == voteOptionString;
 
     return Container(
@@ -125,7 +124,6 @@ class _PollWidgetState extends State<PollWidget> {
               Container(
                 width: constraints.maxWidth * percentage,
                 decoration: BoxDecoration(
-                  // <<--- isMyChoice에 따라 색상 변경
                   color: isMyChoice ? navyColor : const Color(0xFFACB0BF),
                   borderRadius: BorderRadius.circular(4),
                 ),
@@ -137,7 +135,6 @@ class _PollWidgetState extends State<PollWidget> {
                   child: Text(
                     '$title (${(percentage * 100).toStringAsFixed(0)}%)',
                     style: TextStyle(
-                      // <<--- isMyChoice에 따라 텍스트 색상 변경
                       color: isMyChoice ? Colors.white : Colors.black,
                       fontWeight: FontWeight.bold,
                     ),

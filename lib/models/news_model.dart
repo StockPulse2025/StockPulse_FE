@@ -7,7 +7,7 @@ class News {
   final String newsTitle;
   final String dateSource;
   final String companyName;
-  final String currentPrice; // 포매팅된 가격 문자열
+  final String currentPrice;
   final String priceChange;
   final bool isGoodNews;
   final String prediction;
@@ -15,10 +15,8 @@ class News {
   bool isBookmarked;
   final String? newsUrl;
 
-  // --- 추가된 필드: 아이콘 로직을 위한 원시 데이터 ---
   final double influenceScore;
 
-  // influenceScore 기반 계산 getter
   bool get isPredictionPositive => influenceScore >= 0;
 
   News({
@@ -74,13 +72,11 @@ class News {
         ? "+${priceChangeValue.toStringAsFixed(2)}%"
         : "${priceChangeValue.toStringAsFixed(2)}%";
 
-    String formattedCurrentPrice = ''; // 기본값
+    String formattedCurrentPrice = '';
     final priceValue = sourceForStockData['currentPrice'];
-    // currentPrice가 null이 아니고, 비어있지 않은 문자열일 경우에만 포매팅
     if (priceValue != null && priceValue.toString().isNotEmpty) {
       num priceNum = num.tryParse(priceValue.toString()) ?? 0;
       final formatter = NumberFormat('#,###');
-      // "원"을 여기서 추가합니다.
       formattedCurrentPrice = '${formatter.format(priceNum.toInt())}원';
     }
 
@@ -98,7 +94,7 @@ class News {
       currentPrice: formattedCurrentPrice,
       priceChange: priceChangeText,
       prediction: predictionText,
-      influenceScore: localInfluenceScore, // 원시 데이터 저장
+      influenceScore: localInfluenceScore,
     );
   }
 }

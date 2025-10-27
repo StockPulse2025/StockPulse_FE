@@ -33,11 +33,9 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
   bool _isLoadingMyStocks = true;
 
   final ApiService apiService = ApiService();
-  String _currentRankingType = 'TRADING_VALUE'; // 기본값: 거래대금
+  String _currentRankingType = 'TRADING_VALUE';
 
-  // 웹소켓 관련 상태 변수
   StompClient? stompClient;
-  // 여러 구독을 관리하기 위한 Map. key: 구독 채널(destination), value: 구독 해제 함수
   final Map<String, StompUnsubscribe?> _stompSubscriptions = {};
 
   @override
@@ -48,28 +46,24 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
 
     _kospiTabController.addListener(_handleTabSelection);
 
-    // 내 주식 탭 변경 리스너
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
-      if (_tabController.index == 1) {  // 내 주식 탭일 때
+      if (_tabController.index == 1) {
         _fetchMyStocks();
       }
     });
 
     _kospiTabController.addListener(_handleTabSelection);
 
-    // 초기 데이터 로드 후 웹소켓 연결
     _initializeData();
 
-    // 한국 시간 로딩 및 주기적 갱신 시작
     _initializeTime();
   }
 
-  // 시간을 초기화하고 타이머를 설정하는 함수
   void _initializeTime() async {
     print('✨ 한국 시간 API 호출 시작...');
     _currentKoreanTime = await apiService.fetchCurrentKoreanTime();
-    print('✨ 성공! 현재 한국 시간: $_currentKoreanTime'); // 받아온 시간 확인
+    print('✨ 성공! 현재 한국 시간: $_currentKoreanTime');
 
     if (mounted) {
       setState(() {
@@ -77,7 +71,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
       });
     }
 
-    // 1분마다 fetchCurrentKoreanTime을 다시 호출하여 _currentKoreanTime을 갱신
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) async {
       _currentKoreanTime = await apiService.fetchCurrentKoreanTime();
       if (mounted) {
@@ -86,14 +79,11 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     });
   }
 
-  // 초기 데이터 로드와 웹소켓 연결을 함께 처리하는 함수
   Future<void> _initializeData() async {
-    // 두 API 호출을 동시에 진행
     await Future.wait([
       _fetchRankedStocks(),
       _fetchMyStocks(),
     ]);
-    // 데이터 로딩이 끝난 후 웹소켓 연결 시작
     _connectToWebSocket();
   }
 
@@ -114,7 +104,7 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
         _currentRankingType = 'TOP_LOSERS';
         break;
     }
-    _fetchRankedStocks(); // 탭 변경 시 새로운 기준으로 데이터 요청
+    _fetchRankedStocks();
   }
 
   Future<void> _fetchRankedStocks() async {
@@ -127,7 +117,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
           _isLoadingRankedStocks = false;
         });
       }
-      // 데이터 로드 성공 후, 웹소켓이 연결상태이고 현재 탭이 '전체 주식'이면 구독 실행
       if (stompClient?.isActive == true && _tabController.index == 0) {
         _subscribeToStocks(_rankedStocks);
       }
@@ -143,7 +132,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     print("--- 1. _fetchMyStocks 시작 ---");
     setState(() => _isLoadingMyStocks = true);
     try {
-      // 보유종목과 관심종목 API를 동시에 호출
       final results = await Future.wait([
         apiService.fetchPredictionStocks(myStockType: 'OWN'),
         apiService.fetchPredictionStocks(myStockType: 'FAVORITE'),
@@ -175,7 +163,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
           print("   [관심 종목 state 개수]: ${_favoriteStocks.length}개");
         });
 
-        // 두 목록을 합쳐서 웹소켓 구독 실행
         if (stompClient?.isActive == true && _tabController.index == 1) {
           _subscribeToStocks([...owned, ...favorite]);
         }
@@ -196,7 +183,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     _kospiTabController.removeListener(_handleTabSelection);
     _kospiTabController.dispose();
 
-    // 웹소켓 구독 해제 및 연결 종료
     _unsubscribeFromAllStocks();
     stompClient?.deactivate();
 
@@ -205,9 +191,7 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     super.dispose();
   }
 
-  // 웹소켓 서버에 연결
   void _connectToWebSocket() {
-    // 이미 연결 시도 중이거나 연결된 상태면 중복 실행 방지
     if (stompClient != null && stompClient!.isActive) return;
 
     stompClient = StompClient(
@@ -215,7 +199,7 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
         url: 'ws://stockpulse.p-e.kr/ws-stock',
         onConnect: (StompFrame frame) {
           print('주식 홈 화면 웹소켓 연결 성공!');
-          // 현재 활성화된 탭의 주식 목록을 구독
+
           if (_tabController.index == 0) {
             _subscribeToStocks(_rankedStocks);
           } else {
@@ -230,19 +214,15 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     print('웹소켓 연결 시도 중...');
   }
 
-  // 주식 목록을 받아 전부 구독
   void _subscribeToStocks(List<Stock> stocks) {
-    if (stompClient?.isActive != true) return; // 연결 안되어 있으면 실행 안함
+    if (stompClient?.isActive != true) return;
 
-    // 기존 구독 모두 해제
     _unsubscribeFromAllStocks();
 
     print('${stocks.length}개의 종목 구독 시작...');
     for (final stock in stocks) {
-      // stock.symbol이 null이거나 비어있지 않은지 확인
       if (stock.symbol != null && stock.symbol!.isNotEmpty) {
         final destination = '/sub/${stock.symbol}';
-        // 이미 구독 중인지 확인
         if (_stompSubscriptions.containsKey(destination)) continue;
 
         _stompSubscriptions[destination] = stompClient!.subscribe(
@@ -253,7 +233,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     }
   }
 
-  // 모든 구독 해제
   void _unsubscribeFromAllStocks() {
     for (final unsubscribe in _stompSubscriptions.values) {
       unsubscribe?.call();
@@ -262,7 +241,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     print('모든 구독을 해제했습니다.');
   }
 
-  // 실시간 데이터 처리 및 화면 업데이트
   void _handleRealtimeStockData(StompFrame frame) {
     if (frame.body == null || !mounted) return;
 
@@ -273,7 +251,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
 
       bool needsUpdate = false;
 
-      // rankedStocks 리스트 업데이트
       final rankedStock = _rankedStocks.firstWhereOrNull((s) => s.symbol == symbol);
       if (rankedStock != null) {
         rankedStock.currentPrice = (data['currentPrice'] ?? rankedStock.currentPrice).toDouble();
@@ -281,7 +258,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
         needsUpdate = true;
       }
 
-      // 보유종목 리스트에서 해당 주식 찾기
       final ownedStock = _ownedStocks.firstWhereOrNull((s) => s.symbol == symbol);
       if (ownedStock != null) {
         ownedStock.currentPrice = (data['currentPrice'] ?? ownedStock.currentPrice).toDouble();
@@ -289,7 +265,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
         needsUpdate = true;
       }
 
-      // 관심종목 리스트에서 해당 주식 찾기
       final favoriteStock = _favoriteStocks.firstWhereOrNull((s) => s.symbol == symbol);
       if (favoriteStock != null) {
         favoriteStock.currentPrice = (data['currentPrice'] ?? favoriteStock.currentPrice).toDouble();
@@ -312,7 +287,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
   final Color negativeColor = const Color(0xFF0042FF);
 
   bool isMarketOpen() {
-    // _currentKoreanTime이 아직 로드되지 않았다면 '장 닫힘'으로 간주
     if (_currentKoreanTime == null) return false;
 
     final now = _currentKoreanTime!;
@@ -376,7 +350,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     );
   }
 
-  // 섹션 타이틀을 만드는 헬퍼 위젯
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0, left: 20.0, right: 20.0),
@@ -387,7 +360,6 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     );
   }
 
-  // 각 주식 목록을 빌드하는 헬퍼 위젯
   List<Widget> _buildStockListWidgets(List<Stock> stocks) {
     final priceFormatter = NumberFormat('#,###');
 
@@ -403,7 +375,7 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
                 builder: (context) => StockDetailScreen(stockId: stock.stockId),
               ),
             );
-            _fetchMyStocks(); // 상세 화면에서 돌아왔을 때 목록 새로고침
+            _fetchMyStocks();
           },
           child: MyStockListItem(
             rank: stock.rank.toString(),
@@ -590,18 +562,18 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
     return RefreshIndicator(
       onRefresh: _fetchMyStocks,
       child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16.0), // 전체적인 상하 여백
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
         children: [
-          _buildSectionTitle('보유종목'), // 헬퍼 함수로 제목 위젯 생성
+          _buildSectionTitle('보유종목'),
 
-          // 보유종목이 없으면 안내 문구 표시
+
           if (_ownedStocks.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24.0),
               child: Center(child: Text('보유 종목이 없습니다.', style: TextStyle(color: Colors.grey))),
             )
           else
-          // 보유종목 리스트를 Column으로 생성
+
             Column(
               children: _buildStockListWidgets(_ownedStocks),
             ),
@@ -610,26 +582,26 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
             padding: EdgeInsets.symmetric(vertical: 20.0),
             child: Divider(
               color: Color(0xFFE8EBF2),
-              thickness: 8.0, // 두꺼운 구분선
+              thickness: 8.0,
               height: 8.0,
             ),
           ),
 
-          _buildSectionTitle('관심종목'), // 헬퍼 함수로 제목 위젯 생성
+          _buildSectionTitle('관심종목'),
 
-          // 관심종목이 없으면 안내 문구 표시
+
           if (_favoriteStocks.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24.0),
               child: Center(child: Text('관심 종목이 없습니다.', style: TextStyle(color: Colors.grey))),
             )
           else
-          // 관심종목 리스트를 Column으로 생성
+
             Column(
               children: _buildStockListWidgets(_favoriteStocks),
             ),
 
-          const SizedBox(height: 24.0), // 맨 아래쪽 여백
+          const SizedBox(height: 24.0),
         ],
       ),
     );

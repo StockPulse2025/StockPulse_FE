@@ -27,7 +27,6 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
 
     setState(() => _isLoading = true);
 
-    // 백엔드 API 호출 (비밀번호 확인 후 탈퇴)
     bool success = await apiService.deactivateAccount(password);
     setState(() => _isLoading = false);
 

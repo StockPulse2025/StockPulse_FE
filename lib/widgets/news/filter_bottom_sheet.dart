@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 class FilterBottomSheet extends StatefulWidget {
-  // 1. 초기 필터 값을 받을 파라미터 추가
   final Map<String, dynamic>? initialFilters;
 
   const FilterBottomSheet({super.key, this.initialFilters});
@@ -41,7 +40,6 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   @override
   void initState() {
     super.initState();
-    // 2. 위젯 생성 시 전달받은 값으로 상태 초기화
     if (widget.initialFilters != null) {
       final filters = widget.initialFilters!;
       _sortOrder = (filters['sort'] ?? 'LATEST') == 'LATEST' ? '최신순' : '영향도순';
@@ -94,7 +92,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               const Text('필터', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold)),
-              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)), // pop(context)는 아무 값도 반환하지 않음
+              IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             ]),
           ),
           Expanded(
@@ -108,8 +106,6 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                       _buildSectionTitle('뉴스 필터'),
                       const Divider(color: Color(0xFFE8EBF2), thickness: 1.5),
                       _buildSubHeader('정렬'),
-                      // --- CHANGED ---
-                      // API 파라미터에 '오래된순'이 없으므로 '영향도순'으로 변경
                       _buildSingleChoiceChip(['최신순', '영향도순'], _sortOrder, (val) => setState(() => _sortOrder = val)),
                       _buildSubHeader('종목'),
                       _buildSingleChoiceChip(
@@ -140,14 +136,14 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                         _buildRangeSlider(
                           _goodNewsRange,
                               (val) => setState(() => _goodNewsRange = val),
-                          isPositive: true, // 호재 슬라이더임을 표시
+                          isPositive: true,
                         ),
                       _buildSwitchTile('악재', _badNewsFilter, (val) => setState(() => _badNewsFilter = val)),
                       if (_badNewsFilter)
                         _buildRangeSlider(
                           _badNewsRange,
                               (val) => setState(() => _badNewsRange = val),
-                          isPositive: false, // 악재 슬라이더임을 표시
+                          isPositive: false,
                         ),
                       const SizedBox(height: 50),
                     ],
@@ -161,7 +157,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
             child: Row(children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: _resetFilters, // --- CHANGED --- 초기화 함수 연결
+                  onPressed: _resetFilters,
                   child: Text('초기화', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: navyColor)),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -192,13 +188,11 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                       'neutral': _neutralFilter,
                       'positive': {
                         'enabled': _goodNewsFilter,
-                        // --- 수정된 부분: round() 제거, double 값 그대로 전달 ---
                         'minImpact': _goodNewsRange.start,
                         'maxImpact': _goodNewsRange.end,
                       },
                       'negative': {
                         'enabled': _badNewsFilter,
-                        // --- 수정된 부분: round() 제거, double 값 그대로 전달 ---
                         'minImpact': _badNewsRange.start,
                         'maxImpact': _badNewsRange.end,
                       },
@@ -275,21 +269,21 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
           selected: isSelected,
           onSelected: (selected) {
             setState(() {
-              // '전체테마'를 선택하면 다른 선택은 모두 해제
+
               if (item == '전체테마') {
                 if (selected) {
                   _selectedIndustries.clear();
                   _selectedIndustries.add('전체테마');
                 }
               } else {
-                // 다른 테마를 선택하면 '전체테마'는 해제
+
                 _selectedIndustries.remove('전체테마');
                 if (selected) {
                   _selectedIndustries.add(item);
                 } else {
                   _selectedIndustries.remove(item);
                 }
-                // 아무것도 선택되지 않으면 '전체테마'를 다시 선택
+
                 if (_selectedIndustries.isEmpty) {
                   _selectedIndustries.add('전체테마');
                 }
@@ -339,11 +333,9 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
           ),
           child: RangeSlider(
             values: values,
-            // --- 수정된 부분: min, max, divisions 변경 ---
             min: 0.0,
             max: 5.0,
-            divisions: 500, // (5 - 0) / 0.01 = 500
-            // --- 수정된 부분: 라벨 포맷 변경 ---
+            divisions: 500,
             labels: RangeLabels(
               values.start.toStringAsFixed(2),
               values.end.toStringAsFixed(2),
@@ -361,7 +353,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     textAlign: TextAlign.center,
                     textAlignVertical: TextAlignVertical.center,
                     style: const TextStyle(fontSize: 12),
-                    // --- 수정된 부분: 컨트롤러 텍스트 포맷 변경 ---
+
                     controller: TextEditingController(text: values.start.toStringAsFixed(2)),
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
@@ -378,7 +370,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     textAlign: TextAlign.center,
                     textAlignVertical: TextAlignVertical.center,
                     style: const TextStyle(fontSize: 12),
-                    // --- 수정된 부분: 컨트롤러 텍스트 포맷 변경 ---
+
                     controller: TextEditingController(text: values.end.toStringAsFixed(2)),
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),

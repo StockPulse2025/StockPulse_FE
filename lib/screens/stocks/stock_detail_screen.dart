@@ -21,7 +21,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
   late TabController _tabController;
   final ApiService apiService = ApiService();
 
-  // ----- 상태 변수 선언 -----
   String stockName = '';
   String stockSymbol = '';
   String stockImageUrl = '';
@@ -35,12 +34,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
   double candleWidth = 8.0;
   double xAxisInterval = 5.0;
 
-  // 🚨 1. 차트 탭 시점의 뉴스 데이터를 위한 상태 변수 추가
   List<News> _timepointNewsList = [];
   bool _isTimepointNewsLoading = false;
-  DateTime? _selectedChartDate; // 선택된 날짜를 저장하여 제목에 표시
+  DateTime? _selectedChartDate;
 
-  // ===== 기존 뉴스 관련 상태 변수 =====
   List<News> newsList = [];
   bool isNewsLoading = true;
 
@@ -60,10 +57,9 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
     _tabController = TabController(length: 2, vsync: this);
     fetchInitialStockData();
     fetchChartData();
-    fetchNewsData(); // 최신 뉴스 탭을 위한 데이터 로드
+    fetchNewsData();
   }
 
-  // 종목 기본 정보 요청
   Future<void> fetchInitialStockData() async {
     try {
       final result = await apiService.fetchStockDetail(widget.stockId);
@@ -142,11 +138,9 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
     stompClient!.activate();
   }
 
-  // 기간별 차트 데이터 요청
   Future<void> fetchChartData() async {
     setState(() {
       isChartLoading = true;
-      // 🚨 차트 데이터를 새로 불러올 때, 이전에 선택했던 뉴스 정보 초기화
       _timepointNewsList = [];
       _selectedChartDate = null;
     });
@@ -167,7 +161,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
     }
   }
 
-  // '최신 뉴스' 탭을 위한 데이터 로드 함수
   Future<void> fetchNewsData() async {
     setState(() => isNewsLoading = true);
     try {
@@ -185,18 +178,17 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
     }
   }
 
-  // 🚨 2. 차트 막대를 탭했을 때 호출될 함수 (API 호출 로직)
   Future<void> _fetchTimepointNews(DateTime date) async {
     setState(() {
       _isTimepointNewsLoading = true;
-      _selectedChartDate = date; // 선택된 날짜 저장
-      _timepointNewsList = []; // 이전 목록 비우기
+      _selectedChartDate = date;
+      _timepointNewsList = [];
     });
 
     try {
       final fetchedNews = await apiService.fetchNewsForTimepoint(
         stockId: widget.stockId,
-        period: selectedPeriod, // 현재 선택된 차트 기간(DAY, WEEK, MONTH) 사용
+        period: selectedPeriod,
         date: date,
       );
       setState(() {
@@ -214,7 +206,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
     }
   }
 
-  // ===== 뉴스 상세 화면으로 이동하는 함수 추가 =====
   void _navigateToDetail(int newsId) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -223,25 +214,23 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
     );
   }
 
-  // ===== 뉴스 북마크 상태를 변경하는 함수 추가 =====
   Future<void> _toggleBookmark(News newsItem) async {
     final originalStatus = newsItem.isBookmarked;
 
-    // UI 즉시 업데이트
     setState(() {
       newsItem.isBookmarked = !originalStatus;
     });
 
     try {
       final newStatus = await apiService.updateBookmarkStatus(newsItem.newsId);
-      // 서버 응답과 UI가 다를 경우, 서버 값으로 동기화
+
       if (newsItem.isBookmarked != newStatus) {
         setState(() {
           newsItem.isBookmarked = newStatus;
         });
       }
     } catch (e) {
-      // 에러 발생 시 원래 상태로 복구
+
       setState(() {
         newsItem.isBookmarked = originalStatus;
       });
@@ -265,7 +254,6 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
       };
     }).toList();
 
-    // 🔥 [수정] 날짜를 기준으로 오름차순 정렬하여 데이터의 순서를 보장합니다.
     parsedData.sort((a, b) => a['date'].compareTo(b['date']));
 
     return parsedData;
@@ -444,12 +432,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
   Widget _buildChartTab() {
     double chartViewportWidth = (candleWidth + (candleWidth * 0.5)) * candleData.length + 20.0;
 
-    // SingleChildScrollView를 사용하여 차트와 뉴스 목록을 함께 스크롤
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- 기존 차트 관련 위젯들 ---
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
@@ -467,7 +453,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
             const Center(child: Padding(padding: EdgeInsets.all(50.0), child: Text("차트 데이터가 없습니다.")))
           else
             SizedBox(
-              width: double.infinity, // 화면 너비를 꽉 채우도록 설정
+              width: double.infinity,
               height: 300,
               child: StockDetailChart(
                 candleData: candleData,
@@ -475,7 +461,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
                 candleWidth: candleWidth,
                 xAxisInterval: xAxisInterval,
                 selectedPeriod: selectedPeriod,
-                controller: _chartScrollController, // 컨트롤러 전달
+                controller: _chartScrollController,
               ),
             ),
           _buildTimepointNewsSection(),
@@ -484,19 +470,17 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
     );
   }
 
-  // 🚨 5. 선택된 날짜의 뉴스 목록 UI를 그리는 위젯
   Widget _buildTimepointNewsSection() {
     if (_selectedChartDate == null) {
       return const SizedBox.shrink();
     }
 
-    // 🚨 1. Padding 수정: EdgeInsets.all(16.0) -> symmetric(horizontal: 8.0, vertical: 16.0)
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 🚨 제목에도 좌우 여백 일관성을 주기 위해 Padding 추가
+
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             child: Text(
@@ -557,7 +541,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
     );
   }
 
-  // ===== 실시간 뉴스 탭 위젯 수정 =====
+
   Widget _buildRealtimeNewsTab() {
     if (isNewsLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -566,7 +550,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
       return const Center(child: Text("실시간 뉴스가 없습니다."));
     }
     return ListView.builder(
-      // 🚨 2. Padding 수정: 양 옆 여백을 8.0으로 설정
+
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
       itemCount: newsList.length,
       itemBuilder: (context, index) {

@@ -47,7 +47,7 @@ class Post {
   final int? newsId;
   final String? newsTitle;
   final DateTime? newsPublishedDate;
-  final String? newsSource; // press 또는 newsPublisher
+  final String? newsSource;
 
   final int? stockId;
   final String? stockLogoUrl;
@@ -58,7 +58,7 @@ class Post {
   final int? myCommentId;
   final VoteSummary? voteSummary;
   final List<Comment>? comments;
-  final bool? userVoted; // 상세 조회 시 투표 여부
+  final bool? userVoted;
   final int? userVoteType;
 
   Post({

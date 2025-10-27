@@ -17,9 +17,8 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
   News? _mainNews;
   List<News>? _newsList;
   String _errorMessage = '';
-  bool _isLoading = true; // 로딩 상태를 명시적으로 관리
+  bool _isLoading = true;
 
-  // --- 1. 필터 상태를 관리할 변수 추가 ---
   Map<String, dynamic>? _currentFilters;
 
   @override
@@ -28,7 +27,6 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
     _refreshNews();
   }
 
-  // --- 2. _refreshNews와 _applyFilter를 통합하여 하나의 함수로 관리 ---
   Future<void> _loadNewsData({bool isRefresh = false}) async {
     setState(() {
       _isLoading = true;
@@ -36,10 +34,8 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
     });
 
     try {
-      // isRefresh가 true일 때만 메인 뉴스를 새로고침
       final mainNewsFuture = isRefresh ? _apiService.fetchMainNews() : Future.value(_mainNews);
 
-      // 현재 필터 값을 사용하여 뉴스 목록 요청
       final newsListFuture = _apiService.fetchNewsWithFilter(
         sort: _currentFilters?['sort'] ?? 'LATEST',
         allStock: _currentFilters?['allStock'] ?? true,
@@ -55,7 +51,6 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
 
       if (mounted) {
         setState(() {
-          // isRefresh일 때만 메인 뉴스 업데이트, 아닐 경우 기존 값 유지
           if (isRefresh) {
             _mainNews = results[0] as News?;
           }
@@ -73,33 +68,27 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
     }
   }
 
-  // 화면 새로고침 (Pull-to-refresh)
   Future<void> _refreshNews() async {
-    // 필터 초기화 후 데이터 로드
     setState(() {
       _currentFilters = null;
     });
     await _loadNewsData(isRefresh: true);
   }
 
-  // --- 3. _showFilter 메소드 수정 ---
   void _showFilter() async {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        // 필터 시트를 열 때 현재 필터 값을 전달
         return FilterBottomSheet(initialFilters: _currentFilters);
       },
     );
 
     if (result != null) {
-      // 사용자가 '적용하기'를 누르면, 상태를 업데이트하고 뉴스 목록만 다시 로드
       setState(() {
         _currentFilters = result;
       });
-      // isRefresh를 false로 하여 메인 뉴스는 새로고침하지 않음
       await _loadNewsData(isRefresh: false);
     }
   }
@@ -113,7 +102,6 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
   }
 
   Future<void> _toggleBookmark(int newsId) async {
-    // 업데이트할 뉴스를 메인 뉴스와 목록에서 찾음
     News? targetNews;
     int? listIndex;
 
@@ -132,7 +120,6 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
 
     final originalBookmarkStatus = targetNews.isBookmarked;
 
-    // UI 즉시 업데이트
     setState(() {
       targetNews!.isBookmarked = !originalBookmarkStatus;
       if (listIndex != null) {
@@ -204,14 +191,13 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    // 메인 뉴스가 목록에 중복으로 나타나지 않도록 필터링
     final displayList = _newsList!.where((news) => news.newsId != _mainNews!.newsId).toList();
 
     return RefreshIndicator(
       onRefresh: _refreshNews,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8.0),
-        itemCount: displayList.length + 1, // 메인 뉴스 카드 포함
+        itemCount: displayList.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
             return GestureDetector(
@@ -303,7 +289,7 @@ class _NewsRoomScreenState extends State<NewsRoomScreen> {
                 news.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                 color: news.isBookmarked ? Color(0xFF2B3A66) : Colors.white,
               ),
-              onPressed: () => _toggleBookmark(news.newsId), // 수정된 부분
+              onPressed: () => _toggleBookmark(news.newsId),
             ),
           ),
           Positioned(

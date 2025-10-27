@@ -5,7 +5,7 @@ class CustomDialogs {
   static Future<String?> showNicknameDialog(
       BuildContext context, {
         required String currentNickname,
-        required Future<bool> Function(String) onUpdate, // 닉네임 업데이트 콜백
+        required Future<bool> Function(String) onUpdate,
       }) async {
     TextEditingController nicknameController = TextEditingController(text: currentNickname);
     String? newNickname;
@@ -48,10 +48,10 @@ class CustomDialogs {
                 if (inputNickname.isNotEmpty && inputNickname != currentNickname) {
                   bool success = await onUpdate(inputNickname);
                   if (success) {
-                    newNickname = inputNickname; // 성공 시에만 새 닉네임 저장
-                    Navigator.of(dialogContext).pop(newNickname); // 다이얼로그 닫기
+                    newNickname = inputNickname;
+                    Navigator.of(dialogContext).pop(newNickname);
                   }
-                  // 실패 시 onUpdate 내부에서 스낵바 표시하고 다이얼로그는 닫지 않음
+
                 } else {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     const SnackBar(content: Text('닉네임을 입력하거나 현재 닉네임과 다른 닉네임을 입력해주세요.')),
@@ -67,11 +67,10 @@ class CustomDialogs {
   }
 
   // 로그아웃 팝업
-  // 로그아웃 팝업
   static void showLogoutDialog(BuildContext context, {required VoidCallback onConfirm}) {
     showDialog(
       context: context,
-      builder: (BuildContext dialogContext) { // buildContext를 dialogContext로 변경하여 혼동 방지
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           backgroundColor: Colors.white,
           title: const Text(
@@ -102,8 +101,8 @@ class CustomDialogs {
                 ),
               ),
               onPressed: () {
-                Navigator.of(dialogContext).pop(); // 다이얼로그 닫기
-                onConfirm(); // 전달받은 콜백 함수 실행
+                Navigator.of(dialogContext).pop();
+                onConfirm();
               },
             ),
           ],

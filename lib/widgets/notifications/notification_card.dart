@@ -24,16 +24,16 @@ class NotificationCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // [수정] Image.network로 변경하고 에러 빌더 추가
+
           ClipRRect(
             borderRadius: BorderRadius.circular(8.0),
             child: Image.network(
-              notification.stockImgUrl, // API에서 받은 이미지 URL 사용
+              notification.stockImgUrl,
               width: 70,
               height: 70,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
-                return Container( // 이미지 로딩 실패 시 회색 박스와 아이콘 표시
+                return Container(
                   width: 70,
                   height: 70,
                   color: Colors.grey[200],
@@ -43,7 +43,7 @@ class NotificationCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          // [수정] Row 안에서 남는 공간을 모두 차지하도록 Expanded 추가
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,7 +63,7 @@ class NotificationCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                    notification.newsTitle, // API 데이터 사용
+                    notification.newsTitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)
@@ -73,7 +73,7 @@ class NotificationCard extends StatelessWidget {
                   children: [
                     ClipOval(
                       child: Image.network(
-                        notification.stockImgUrl, // 로고 이미지도 동일 URL 사용
+                        notification.stockImgUrl,
                         width: 20,
                         height: 20,
                         fit: BoxFit.cover,

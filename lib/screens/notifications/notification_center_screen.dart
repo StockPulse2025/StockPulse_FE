@@ -17,7 +17,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
   late TabController _tabController;
   final Color navyColor = const Color(0xFF2B3A66);
 
-  // [수정] API 연동을 위한 변수들
+
   final ApiService _apiService = ApiService();
   List<NotificationModel> _holdingsNotifications = [];
   List<NotificationModel> _watchlistNotifications = [];
@@ -32,7 +32,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
     _fetchWatchlistNotifications(); // 관심 종목도 미리 불러오기
   }
 
-  // [추가] 보유 종목 알림 API 호출
+
   Future<void> _fetchHoldingsNotifications() async {
     setState(() => _isLoadingHoldings = true);
     try {
@@ -45,7 +45,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
     }
   }
 
-  // [추가] 관심 종목 알림 API 호출
+
   Future<void> _fetchWatchlistNotifications() async {
     setState(() => _isLoadingWatchlist = true);
     try {
@@ -111,7 +111,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
             child: TabBarView(
               controller: _tabController,
               children: [
-                // [수정] "준비 중" 화면 대신 실제 리스트 위젯 호출
+
                 _buildNotificationList(_holdingsNotifications, _isLoadingHoldings, _fetchHoldingsNotifications),
                 _buildNotificationList(_watchlistNotifications, _isLoadingWatchlist, _fetchWatchlistNotifications),
               ],
@@ -136,14 +136,14 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
             const SizedBox(height: 16),
             const Text('받은 알림이 없습니다.', style: TextStyle(fontSize: 18, color: Colors.grey)),
             const SizedBox(height: 12),
-            // --- [수정] 새로고침 버튼 스타일 변경 ---
+
             ElevatedButton(
               onPressed: onRefresh,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE8EBF2), // 배경색 변경
-                foregroundColor: navyColor, // 탭 효과(ripple) 색상
-                elevation: 0, // 그림자 제거
-                shadowColor: Colors.transparent, // 그림자 색상 제거
+                backgroundColor: const Color(0xFFE8EBF2),
+                foregroundColor: navyColor,
+                elevation: 0,
+                shadowColor: Colors.transparent,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -152,7 +152,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
               child: Text(
                 '새로고침',
                 style: TextStyle(
-                  color: navyColor, // 글자색을 남색으로 변경
+                  color: navyColor,
                   fontWeight: FontWeight.bold,
                 ),
               ),

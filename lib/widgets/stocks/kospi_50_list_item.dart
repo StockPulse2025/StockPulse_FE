@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // 숫자 포맷팅을 위해 intl 패키지 import
+import 'package:intl/intl.dart';
 import 'package:stockpulse2/services/api_service.dart';
 
 class Kospi50ListItem extends StatefulWidget {
@@ -46,26 +46,22 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
   }
 
   Future<void> _toggleOwned() async {
-    // UI 즉시 반영
     setState(() => _isOwned = !_isOwned);
     try {
       await apiService.toggleOwnedStock(widget.stockId);
-      widget.onToggle(); // <--- API 호출 성공 후 콜백 실행!
+      widget.onToggle();
     } catch (e) {
-      // 실패 시 UI 원상 복구
       setState(() => _isOwned = !_isOwned);
       print('보유 종목 토글 실패: $e');
     }
   }
 
   Future<void> _toggleFavorite() async {
-    // UI 즉시 반영
     setState(() => _isFavorite = !_isFavorite);
     try {
       await apiService.toggleFavoriteStock(widget.stockId);
-      widget.onToggle(); // <--- API 호출 성공 후 콜백 실행!
+      widget.onToggle();
     } catch (e) {
-      // 실패 시 UI 원상 복구
       setState(() => _isFavorite = !_isFavorite);
       print('관심 종목 토글 실패: $e');
     }
@@ -94,7 +90,6 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
     final logoPath = widget.logoPath.isNotEmpty ? widget.logoPath : 'https://via.placeholder.com/40';
     final bool isUp = widget.changeRate >= 0;
 
-    // [추가] intl 패키지를 사용하여 안전하게 숫자 포맷팅
     final priceFormatter = NumberFormat('#,###');
     final formattedPrice = '${priceFormatter.format(widget.price)}원';
     final formattedChangeRate = '${isUp ? '+' : ''}${widget.changeRate.toStringAsFixed(2)}%';
@@ -111,7 +106,7 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
               width: 40,
               height: 40,
               fit: BoxFit.cover,
-              // 이미지 로딩 실패 시 에러 아이콘 표시
+
               errorBuilder: (context, error, stackTrace) {
                 return const Icon(Icons.error, size: 40);
               },
@@ -126,7 +121,7 @@ class _Kospi50ListItemState extends State<Kospi50ListItem> {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    // 포맷팅된 문자열을 Text 위젯에 전달
+
                     Text(formattedPrice, style: const TextStyle(color: Color(0xFF585858), fontSize: 14, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 8),
                     Text(formattedChangeRate, style: TextStyle(color: isUp ? positiveColor : negativeColor, fontSize: 14, fontWeight: FontWeight.bold)),

@@ -32,7 +32,6 @@ class StockDetailChart extends StatelessWidget {
     return SizedBox(
       height: 250,
       child: SingleChildScrollView(
-        // 🔥 [수정] 전달받은 controller를 연결
         controller: controller,
         scrollDirection: Axis.horizontal,
         child: Container(
@@ -85,7 +84,6 @@ class StockDetailChart extends StatelessWidget {
                     getTitlesWidget: (value, meta) {
                       int index = value.toInt();
                       if (index >= 0 && index < candleData.length) {
-                        // candleData[index]['date']는 이미 DateTime 타입이므로 캐스팅 불필요
                         DateTime date = candleData[index]['date'];
                         final format = selectedPeriod == 'MONTH' ? 'yy/MM' : 'MM/dd';
                         return Text(DateFormat(format).format(date), style: const TextStyle(color: Colors.grey, fontSize: 10));

@@ -1,4 +1,4 @@
-import 'dart:async'; // Timer를 사용하기 위해 import
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../models/stock_model.dart';
@@ -22,7 +22,6 @@ class _StockSelectionScreenState extends State<StockSelectionScreen> {
   @override
   void initState() {
     super.initState();
-    // 검색창의 텍스트가 변경될 때마다 _onSearchChanged 함수 호출
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -34,7 +33,6 @@ class _StockSelectionScreenState extends State<StockSelectionScreen> {
     super.dispose();
   }
 
-  // 사용자의 타이핑이 멈추면(500ms) 검색을 실행하여 불필요한 API 호출을 줄임
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
@@ -42,9 +40,8 @@ class _StockSelectionScreenState extends State<StockSelectionScreen> {
     });
   }
 
-  // API를 호출하여 주식을 검색하는 함수
+  // API를 호출하여 주식을 검색
   Future<void> _performSearch(String keyword) async {
-    // 검색어가 비어있으면 목록을 비우고 함수 종료
     if (keyword.trim().isEmpty) {
       if (mounted) {
         setState(() {
@@ -94,9 +91,8 @@ class _StockSelectionScreenState extends State<StockSelectionScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.black),
-          onPressed: () => Navigator.of(context).pop(), // 인자 없이 pop
+          onPressed: () => Navigator.of(context).pop(),
         ),
-        // 제목 대신 검색창(TextField) 배치
         title: TextField(
           controller: _searchController,
           autofocus: true,
@@ -110,7 +106,7 @@ class _StockSelectionScreenState extends State<StockSelectionScreen> {
     );
   }
 
-  // 화면의 상태에 따라 다른 위젯을 보여주는 함수
+  // 화면의 상태에 따라 다른 위젯
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -140,7 +136,6 @@ class _StockSelectionScreenState extends State<StockSelectionScreen> {
       separatorBuilder: (context, index) => const Divider(color: Color(0xFFE1E1E3), height: 1),
       itemBuilder: (context, index) {
         final stock = _searchResults[index];
-        // search API 응답에는 가격 정보가 없으므로, 이름과 심볼만 표시
         return ListTile(
           contentPadding: EdgeInsets.zero,
           leading: CircleAvatar(
@@ -155,7 +150,6 @@ class _StockSelectionScreenState extends State<StockSelectionScreen> {
           title: Text(stock.name, style: const TextStyle(fontWeight: FontWeight.bold)),
           subtitle: Text(stock.symbol),
           onTap: () {
-            // 주식을 선택하면, 선택된 stock 객체를 이전 화면으로 반환
             Navigator.pop(context, stock);
           },
         );

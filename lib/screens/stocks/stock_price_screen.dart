@@ -15,7 +15,6 @@ class StockPriceScreen extends StatefulWidget {
 class _StockPriceScreenState extends State<StockPriceScreen> {
   StompClient? stompClient;
 
-  // 화면에 표시할 주식 데이터들
   bool isLoading = true;
   String stockSymbol = "";
   String stockName = "";
@@ -30,10 +29,9 @@ class _StockPriceScreenState extends State<StockPriceScreen> {
   @override
   void initState() {
     super.initState();
-    loadInitialStockData(); // REST API로 초기 데이터 로딩
+    loadInitialStockData();
   }
 
-  // 1단계: REST API로 초기 주식 정보 가져오기
   Future<void> loadInitialStockData() async {
     try {
       final response = await http.get(
@@ -65,7 +63,6 @@ class _StockPriceScreenState extends State<StockPriceScreen> {
 
           print('📊 초기 데이터 로딩 완료: $stockName ($stockSymbol)');
 
-          // 2️⃣ 초기 데이터 로딩 완료 후 웹소켓 연결
           connectToWebSocket();
         }
       } else {
@@ -79,7 +76,6 @@ class _StockPriceScreenState extends State<StockPriceScreen> {
     }
   }
 
-  // 2단계: 웹소켓 서버에 연결 (초기 데이터 로딩 후)
   void connectToWebSocket() {
     stompClient = StompClient(
       config: StompConfig(
@@ -94,32 +90,26 @@ class _StockPriceScreenState extends State<StockPriceScreen> {
     print('🔄 웹소켓 연결 시도 중...');
   }
 
-  // 3단계: 웹소켓 연결 성공 후 실시간 체결가 구독
   void onWebSocketConnected(StompFrame frame) {
     print('✅ 웹소켓 연결 성공! 실시간 체결가 구독 시작');
 
-    // 현재 주식의 실시간 체결가 구독
     stompClient!.subscribe(
-      destination: '/sub/$stockSymbol', // 예: /sub/005930
+      destination: '/sub/$stockSymbol',
       callback: (StompFrame frame) {
-        // 📨 체결가 발생 시 실행
         handleRealtimeStockData(frame.body!);
       },
     );
   }
 
-  // 4단계: 실시간 체결가로 화면 업데이트
   void handleRealtimeStockData(String jsonData) {
     try {
       Map<String, dynamic> data = jsonDecode(jsonData);
 
       setState(() {
-        // 실시간으로 변경되는 값들만 업데이트
         currentPrice = (data['currentPrice'] ?? currentPrice).toDouble();
         changeRate = (data['changeRate'] ?? changeRate).toDouble();
         changeAmount = (data['changeAmount'] ?? changeAmount).toDouble();
 
-        // 색깔 업데이트
         updatePriceColor();
       });
 
@@ -154,26 +144,24 @@ class _StockPriceScreenState extends State<StockPriceScreen> {
       appBar: AppBar(
         title: Text('실시간 주식 가격'),
         actions: [
-          // 즐겨찾기 아이콘
           IconButton(
             icon: Icon(
               favorite ? Icons.favorite : Icons.favorite_border,
               color: favorite ? Colors.red : null,
             ),
             onPressed: () {
-              // to.do 즐겨찾기 토글 API 호출
             },
           ),
         ],
       ),
       body: isLoading
-          ? Center(child: CircularProgressIndicator()) // 로딩 중
+          ? Center(child: CircularProgressIndicator())
           : Padding(
         padding: EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // 주식 이미지 (있는 경우)
+
             if (imageUrl.isNotEmpty)
               Container(
                 width: 60,
@@ -189,7 +177,7 @@ class _StockPriceScreenState extends State<StockPriceScreen> {
 
             SizedBox(height: 20),
 
-            // 종목명과 심볼
+
             Text(
               '$stockName ($stockSymbol)',
               style: TextStyle(
@@ -199,7 +187,6 @@ class _StockPriceScreenState extends State<StockPriceScreen> {
               textAlign: TextAlign.center,
             ),
 
-            // 보유 여부 표시
             if (owned)
               Container(
                 margin: EdgeInsets.only(top: 8),
@@ -220,7 +207,6 @@ class _StockPriceScreenState extends State<StockPriceScreen> {
 
             SizedBox(height: 40),
 
-            // 현재가 (실시간으로 변경됨)
             Text(
               '${formatPrice(currentPrice)}원',
               style: TextStyle(

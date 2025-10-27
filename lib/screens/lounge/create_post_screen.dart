@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // 천 단위 콤마(,)를 위해 import
+import 'package:intl/intl.dart';
 import '../../models/news_model.dart';
 import 'package:stockpulse2/models/stock_model.dart';
 import '../../services/api_service.dart';
@@ -94,7 +94,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     if (createdPostId != null && mounted) {
       // 성공 시 라운지 탭으로 이동
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const HomeScreen(initialIndex: 3)), // 3번 인덱스가 라운지 탭이라고 가정
+        MaterialPageRoute(builder: (context) => const HomeScreen(initialIndex: 3)),
             (route) => false,
       );
       // 생성된 게시글 상세 페이지로 바로 이동
@@ -128,21 +128,21 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         titleSpacing: 0,
         centerTitle: false,
         title: const Text('게시글 작성', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        // 4. 완료 버튼을 AppBar의 actions로 이동
+
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: TextButton(
               onPressed: _submitPost,
               style: TextButton.styleFrom(
-                backgroundColor: Colors.white, // 배경색 흰색
+                backgroundColor: Colors.white,
               ),
               child: Text(
                 '완료',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: navyColor, // 문구색 남색
+                  color: navyColor,
                 ),
               ),
             ),
@@ -155,9 +155,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDecoratedBox(_buildNewsInfoCard()),
-            const SizedBox(height: 32), // 3. 종목 선택 위젯 위 여백 늘리기
+            const SizedBox(height: 32),
             _buildDecoratedBox(_buildStockSelector()),
-            const SizedBox(height: 16), // 3. 종목 선택 위젯 아래 여백
+            const SizedBox(height: 16),
             const Divider(height: 32, color: Color(0xFFE8EBF2)),
             TextField(
               controller: _titleController,
@@ -200,14 +200,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
   }
 
-  // 2. 뉴스 정보 카드 디자인 변경
   Widget _buildNewsInfoCard() {
     return Container(
       padding: const EdgeInsets.all(12),
       color: const Color(0xFFF9FAFB),
       child: Row(
         children: [
-          // 이미지 크기 줄이기
+
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: Image.network(
@@ -291,10 +290,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                          Text(_selectedStock!.name, style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                          Row(
                            children: [
-                             // <<--- 1. 포맷팅된 현재가 표시
                              Text(priceString, style: const TextStyle(fontSize: 12)),
                              const SizedBox(width: 8),
-                             // <<--- 2. 포맷팅된 변동률 표시
                              Text(
                                changeRateString,
                                style: TextStyle(

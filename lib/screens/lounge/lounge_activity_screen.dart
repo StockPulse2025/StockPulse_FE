@@ -116,8 +116,6 @@ class _LoungeActivityScreenState extends State<LoungeActivityScreen> with Single
     }
   }
 
-  // ====================== [ _buildActivityList 함수를 여기로 이동] ======================
-  // build 메서드보다 먼저 선언되어야 참조 오류가 발생하지 않습니다.
   Widget _buildActivityList(List<Post> posts) {
     final bool isMyPostTab = _tabController.index == 0;
 

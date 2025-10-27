@@ -36,7 +36,6 @@ class ApiService {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
 
-        // 모든 요청 전에 최신 토큰을 헤더에 추가 (이미 있으면 유지)
         final token = await getJwtToken();
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
@@ -52,7 +51,7 @@ class ApiService {
       onError: (DioException e, handler) async {
         print("❌ DIO ERROR");
         print("    - Path: ${e.requestOptions.path}");
-        print("    - Status Code: ${e.response?.statusCode}"); // response.data 뿐만 아니라, response 전체를 출력하여 숨겨진 정보를 확인
+        print("    - Status Code: ${e.response?.statusCode}");
         print("    - Response: ${e.response.toString()}");
 
         if (e.response?.statusCode == 401 &&
@@ -102,7 +101,7 @@ class ApiService {
   Future<void> saveJwtToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('jwtToken', token);
-    // 로그인 성공 시 _dio 인스턴스의 헤더를 즉시 업데이트
+
     _dio.options.headers['Authorization'] = 'Bearer $token';
     print('JWT Token saved and Dio headers updated.');
   }
@@ -131,7 +130,7 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('jwtToken');
     await prefs.remove('refreshToken');
-    _dio.options.headers.remove('Authorization'); // Dio 헤더에서도 제거
+    _dio.options.headers.remove('Authorization');
     print('All tokens cleared.');
   }
 
@@ -198,7 +197,7 @@ class ApiService {
   Future<bool> logout() async {
     try {
       final response = await _dio.get(
-          '/api/token/logout'); // Swagger 문서에 명시된 로그아웃 API
+          '/api/token/logout');
       if (response.statusCode == 200) {
         await clearTokens();
         print('로그아웃 성공');
@@ -225,13 +224,12 @@ class ApiService {
         throw Exception('No JWT token found for deactivation');
       }
 
-      // API 명세에 맞게 DELETE 메소드로 수정
       final response = await _dio.delete(
         '/api/auth/deactivate',
-        data: {'password': password}, // 비밀번호를 요청 본문에 담아 전송
+        data: {'password': password},
       );
       if (response.statusCode == 200 && response.data['isSuccess']) {
-        await clearTokens(); // 회원 탈퇴 성공 시 토큰 정리
+        await clearTokens();
       }
       return response.statusCode == 200 && response.data['isSuccess'];
     } on DioException catch (e) {
@@ -246,17 +244,14 @@ class ApiService {
   // WorldTimeAPI를 이용해 현재 한국 시간을 가져오는 함수
   Future<DateTime> fetchCurrentKoreanTime() async {
     try {
-      // WorldTimeAPI의 서울 시간 엔드포인트
       final response = await Dio().get('http://worldtimeapi.org/api/timezone/Asia/Seoul');
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        // 'datetime' 필드의 값을 DateTime 객체로 파싱하여 반환
         return DateTime.parse(data['datetime'] as String);
       }
       throw Exception('Failed to load Korean time');
     } catch (e) {
       print('한국 시간 로드 실패: $e');
-      // API 실패 시, 임시로 기기 시간을 반환하여 앱이 멈추지 않도록 함
       return DateTime.now();
     }
   }
@@ -272,7 +267,6 @@ class ApiService {
       return null;
     } on DioException catch (e) {
       print('사용자 닉네임 API 호출 실패: ${e.response?.data ?? e.message}');
-      // 401 Unauthorized 에러는 Interceptor에서 처리하므로 여기서 특별히 다시 throw하지 않아도 됨
       return null;
     } catch (e) {
       print('사용자 닉네임 일반 예외: $e');
@@ -377,7 +371,7 @@ class ApiService {
     bool ownedStock = false,
     bool favoriteStock = false,
     List<String> industries = const [],
-    // --- 추가된 파라미터 ---
+
     Map<String, dynamic>? positiveFilter,
     Map<String, dynamic>? negativeFilter,
     bool? neutralFilter,
@@ -391,7 +385,6 @@ class ApiService {
           'ownedStock': ownedStock,
           'favoriteStock': favoriteStock,
           'industries': industries,
-          // 전달받은 맵을 사용, null이면 기본값 사용
           "positive": positiveFilter ?? {"enabled": false, "minImpact": 0.0, "maxImpact": 5.0},
           "negative": negativeFilter ?? {"enabled": false, "minImpact": 0.0, "maxImpact": 5.0},
           "neutral": neutralFilter ?? false,
@@ -460,7 +453,6 @@ class ApiService {
       if (response.statusCode == 200 && response.data['isSuccess']) {
         final List<dynamic> data = response.data['result'];
         if (data.isEmpty) {
-          // 스크랩한 뉴스가 없으면 빈 리스트를 반환
           return [];
         }
         return data.map((json) => News.fromJson(json)).toList();
@@ -532,7 +524,6 @@ class ApiService {
       if (res.statusCode == 200 && res.data['isSuccess']) {
         final resultList = res.data['result'] as List;
 
-        // 각 결과 항목에 'owned'와 'favorite' 필드가 있는지 체크
         for (var item in resultList) {
           print('보유: ${item['owned']}, 관심: ${item['favorite']}');
         }
@@ -586,7 +577,6 @@ class ApiService {
       final response = await _dio.get('/api/v1/stocks/$stockId/candle',
           queryParameters: {'period': period});
       if (response.statusCode == 200 && response.data['isSuccess']) {
-        // API 응답 구조에 맞게 stockCandleDataList를 반환
         return List<Map<String, dynamic>>.from(
             response.data['result']['stockCandleDataList']);
       }
@@ -623,7 +613,6 @@ class ApiService {
   }
 
   // 8. 주식 : 내 종목 주가 변동률 예측 조회 API (GET /api/v1/stocks/prediction)
-  // 기존 fetchPredictionTop5Stocks 함수와 동일한 기능
   Future<List<Stock>> fetchPredictionStocks(
       {required String myStockType}) async {
     // ALL, OWN, FAVORITE
@@ -667,7 +656,6 @@ class ApiService {
     required String period, // DAY, WEEK, MONTH
     required DateTime date,
   }) async {
-    // API는 'yyyy-MM-dd' 형식을 요구하므로 DateTime을 String으로 변환합니다.
     final String formattedDate = DateFormat('yyyy-MM-dd').format(date);
 
     try {

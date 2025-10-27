@@ -5,14 +5,14 @@ class NewsCard extends StatelessWidget {
   final News news;
   final EdgeInsetsGeometry? margin;
   final VoidCallback onBookmarkToggle;
-  final bool showPriceInfo; // 1. 가격 표시 여부를 결정할 변수 추가
+  final bool showPriceInfo;
 
   const NewsCard({
     super.key,
     required this.news,
     required this.onBookmarkToggle,
     this.margin,
-    this.showPriceInfo = true, // 2. 기본값을 true로 설정
+    this.showPriceInfo = true,
   });
 
   @override
@@ -106,7 +106,6 @@ class NewsCard extends StatelessWidget {
                                   Flexible(child: Text(news.companyName, style: const TextStyle(color: Color(
                                       0xFF232323), fontWeight: FontWeight.bold, fontSize: 11), overflow: TextOverflow.ellipsis)),
 
-                                  // 3. showPriceInfo가 true일 때만 가격과 등락률을 표시하도록 수정
                                   if (showPriceInfo) ...[
                                     const SizedBox(width: 4),
                                     Text(news.currentPrice, style: const TextStyle(color: Color(0xFF7C7C7C), fontWeight: FontWeight.bold, fontSize: 9)),

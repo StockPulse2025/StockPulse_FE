@@ -130,7 +130,6 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
   late Future<List<News>> newsFuture; // 최신 뉴스 데이터는 FutureBuilder 유지
   late String _currentUserName;
 
-  // ✨ [수정] TOP 5 섹션을 위한 상태 변수
   List<Stock> _top5Stocks = [];
   bool _isLoadingTop5 = true;
   String? _top5Error; // 에러 메시지 저장을 위한 변수
@@ -161,7 +160,6 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
     }
   }
 
-  // ✨ [수정] TOP 5 데이터 로딩 방식 변경
   Future<void> _loadHomeData() async {
     // 뉴스 로딩 (기존 방식 유지)
     newsFuture = apiService.fetchMyLatestNews();
@@ -203,7 +201,6 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
     }
   }
 
-  // ✨ [수정] 웹소켓 데이터 처리 로직
   void _connectWebSocketToTop5(List<Stock> stocks) {
     // 기존 연결 있으면 비활성화
     if (stompClient != null && stompClient!.isActive) {
@@ -226,7 +223,6 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
                   final data = jsonDecode(frame.body!);
                   final receivedSymbol = data['symbol'];
 
-                  // _top5Stocks 리스트에서 직접 해당 주식을 찾아 업데이트
                   final targetStock = _top5Stocks.firstWhereOrNull((s) => s.symbol == receivedSymbol);
 
                   if (targetStock != null) {
@@ -366,7 +362,7 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
         actions: const [],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadHomeData, // ✨ 새로고침 기능 추가
+        onRefresh: _loadHomeData,
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -445,7 +441,6 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
                   children: [
                     const SizedBox(height: 20),
 
-                    // 최신 뉴스 섹션 (기존 FutureBuilder 유지)
                     FutureBuilder<List<News>>(
                       future: newsFuture,
                       builder: (context, snapshot) {
@@ -486,8 +481,7 @@ class _HomeContentWidgetState extends State<_HomeContentWidget> {
                     ),
                     const SizedBox(height: 20),
 
-                    // ✨ [수정] 주가 변동률 예측 TOP 5 섹션
-                    _buildTop5Section(), // FutureBuilder 대신 상태 기반 위젯 호출
+                    _buildTop5Section(),
                     const SizedBox(height: 24),
                   ],
                 ),

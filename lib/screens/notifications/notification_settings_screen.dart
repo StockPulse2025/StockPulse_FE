@@ -18,7 +18,6 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
   bool _goodNewsFilter = true;
   bool _badNewsFilter = true;
 
-  // [수정] 슬라이더 범위와 기본값을 0-5 사이로 변경
   RangeValues _goodNewsRange = const RangeValues(2.5, 5.0);
   RangeValues _badNewsRange = const RangeValues(1.0, 3.5);
 
@@ -31,7 +30,6 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     _loadSettings();
   }
 
-  // [추가] 서버에서 설정 불러오기
   Future<void> _loadSettings() async {
     setState(() => _isLoading = true);
     try {
@@ -42,7 +40,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
         _goodNewsFilter = settings['goodNews'];
         _badNewsFilter = settings['badNews'];
         _neutralFilter = settings['neutralNews'];
-        // API(0-100) -> UI(0-5) 값 변환
+
         _goodNewsRange = RangeValues(
           (settings['goodSensitivity1'] as num).toDouble() / 20.0,
           (settings['goodSensitivity2'] as num).toDouble() / 20.0,
@@ -59,7 +57,6 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     }
   }
 
-  // [수정] 서버에 설정 저장하기
   Future<void> _saveSettings() async {
     final success = await _apiService.updateNotificationSettings(
       ownStock: _holdingsFilter,
@@ -67,7 +64,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       goodNews: _goodNewsFilter,
       badNews: _badNewsFilter,
       neutralNews: _neutralFilter,
-      // UI(0-5) -> API(0-100) 값 변환
+
       goodSensitivity1: _goodNewsRange.start * 20.0,
       goodSensitivity2: _goodNewsRange.end * 20.0,
       badSensitivity1: _badNewsRange.start * 20.0,
@@ -82,11 +79,10 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     }
   }
 
-  // [수정] 서버에 설정 초기화 요청
   Future<void> _resetFilters() async {
     final success = await _apiService.resetNotificationSettings();
     if (success) {
-      await _loadSettings(); // 초기화 성공 시, 다시 서버에서 설정값 불러오기
+      await _loadSettings();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('설정이 초기화되었습니다.')));
     } else {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('초기화에 실패했습니다.')));
@@ -188,7 +184,6 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     );
   }
 
-  // _buildSectionTitle, _buildSwitchTile, _buildRangeSlider 위젯들은 수정 없이 그대로 사용합니다.
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(top: 24, bottom: 8),

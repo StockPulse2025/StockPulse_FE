@@ -17,7 +17,7 @@ class UserProvider with ChangeNotifier {
     notifyListeners(); // UI에 변경 사항 알림
   }
 
-  // 닉네임 업데이트 (API 호출 후)
+  // 닉네임 업데이트
   Future<bool> updateNickname(String newNickname) async {
     bool success = await _apiService.updateNickname(newNickname);
     if (success) {
