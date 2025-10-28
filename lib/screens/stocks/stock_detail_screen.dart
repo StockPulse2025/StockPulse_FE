@@ -401,7 +401,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> with TickerProvid
               children: [
                 Text(stockName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                 const SizedBox(width: 4),
-                Text('KOSPI $stockSymbol', style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                Text('KOSPI $stockSymbol', style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
               ],
             ),
             const Spacer(),

@@ -86,12 +86,12 @@ class HomeTop5Section extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 Row(
                   children: [
-                    Text(price, style: const TextStyle(fontSize: 12, color: Color(0xFF585858))),
+                    Text(price, style: const TextStyle(fontSize: 11, color: Color(0xFF585858))),
                     const SizedBox(width: 8),
-                    Text(change, style: TextStyle(fontSize: 12, color: isPriceUp ? positiveColor : negativeColor)),
+                    Text(change, style: TextStyle(fontSize: 11, color: isPriceUp ? positiveColor : negativeColor)),
                   ],
                 ),
               ],

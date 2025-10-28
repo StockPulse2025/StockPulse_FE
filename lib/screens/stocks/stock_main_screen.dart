@@ -423,9 +423,9 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
               Row(
                 children: [
                   _buildKospiCard(
-                      'KOSPI 80 🇰🇷', '3,796.22', '-50.43(-1.31%)', false),
+                      'KOSPI 🇰🇷', '4,010.41', '-32.42(-0.80%)', false),
                   const SizedBox(width: 16),
-                  _buildKospiCard('코스피 🇰🇷', '3,845.56', '-38.12(-0.98%)', false),
+                  _buildKospiCard('KOSDAQ 🇰🇷', '903.30', '+0.60(+0.07%)', true),
                 ],
               ),
               const SizedBox(height: 32),
