@@ -11,6 +11,7 @@ import '../../widgets/stocks/my_stock_list_item.dart';
 import 'stock_detail_screen.dart';
 import '../../models/stock_model.dart';
 import '../../services/api_service.dart';
+import '../../models/market_index_model.dart';
 
 class StockMainScreen extends StatefulWidget {
   const StockMainScreen({super.key});
@@ -24,6 +25,9 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
   late TabController _kospiTabController;
   DateTime? _currentKoreanTime;
   Timer? _timer;
+
+  MarketIndices? _marketIndices;
+  bool _isLoadingIndices = true;
 
   List<Stock> _rankedStocks = [];
   List<Stock> _ownedStocks = [];
@@ -81,6 +85,7 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
 
   Future<void> _initializeData() async {
     await Future.wait([
+      _fetchMarketIndices(),
       _fetchRankedStocks(),
       _fetchMyStocks(),
     ]);
@@ -105,6 +110,24 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
         break;
     }
     _fetchRankedStocks();
+  }
+
+  Future<void> _fetchMarketIndices() async {
+    setState(() => _isLoadingIndices = true);
+    try {
+      final indices = await apiService.fetchMarketIndices();
+      if (mounted) {
+        setState(() {
+          _marketIndices = indices;
+          _isLoadingIndices = false;
+        });
+      }
+    } catch (e) {
+      print('주가 지수 로드 실패: $e');
+      if (mounted) {
+        setState(() => _isLoadingIndices = false);
+      }
+    }
   }
 
   Future<void> _fetchRankedStocks() async {
@@ -392,6 +415,9 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
   }
 
   Widget _buildAllStocksTab() {
+    final priceFormatter = NumberFormat('#,##0.00');
+    final changeFormatter = NumberFormat('#,##0.00');
+
     return _isLoadingRankedStocks
         ? const Center(child: CircularProgressIndicator())
         : Column(
@@ -420,12 +446,24 @@ class _StockMainScreenState extends State<StockMainScreen> with TickerProviderSt
                 ],
               ),
               const SizedBox(height: 16),
-              Row(
+              // 이 부분이 핵심 수정 부분입니다.
+              _isLoadingIndices
+                  ? const Center(child: CircularProgressIndicator())
+                  : Row(
                 children: [
                   _buildKospiCard(
-                      'KOSPI 🇰🇷', '4,010.41', '-32.42(-0.80%)', false),
+                    'KOSPI 🇰🇷',
+                    priceFormatter.format(_marketIndices?.kospi.currentPrice ?? 0),
+                    '${_marketIndices?.kospi.changeAmount.isNegative == false ? '+' : ''}${changeFormatter.format(_marketIndices?.kospi.changeAmount ?? 0)} (${_marketIndices?.kospi.changeRate.isNegative == false ? '+' : ''}${_marketIndices?.kospi.changeRate.toStringAsFixed(2)}%)',
+                    (_marketIndices?.kospi.changeAmount ?? 0) >= 0,
+                  ),
                   const SizedBox(width: 16),
-                  _buildKospiCard('KOSDAQ 🇰🇷', '903.30', '+0.60(+0.07%)', true),
+                  _buildKospiCard(
+                    'KOSDAQ 🇰🇷',
+                    priceFormatter.format(_marketIndices?.kosdaq.currentPrice ?? 0),
+                    '${_marketIndices?.kosdaq.changeAmount.isNegative == false ? '+' : ''}${changeFormatter.format(_marketIndices?.kosdaq.changeAmount ?? 0)} (${_marketIndices?.kosdaq.changeRate.isNegative == false ? '+' : ''}${_marketIndices?.kosdaq.changeRate.toStringAsFixed(2)}%)',
+                    (_marketIndices?.kosdaq.changeAmount ?? 0) >= 0,
+                  ),
                 ],
               ),
               const SizedBox(height: 32),

@@ -7,6 +7,7 @@ import '../../models/notification_model.dart';
 import 'package:stockpulse2/models/comment_model.dart';
 import 'package:stockpulse2/models/topstock_model.dart';
 import 'package:stockpulse2/models/user_model.dart';
+import '../../models/market_index_model.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/news_detail_model.dart';
@@ -676,6 +677,19 @@ class ApiService {
       }
     } on DioException catch (e) {
       throw Exception('특정 시점 뉴스 API 호출 실패: ${e.response?.data ?? e.message}');
+    }
+  }
+
+  // 11. 주식 : 주가 지수 조회 API (GET /api/v1/stocks/market/index)
+  Future<MarketIndices> fetchMarketIndices() async {
+    try {
+      final response = await _dio.get('/api/v1/stocks/market/index');
+      if (response.statusCode == 200 && response.data['isSuccess']) {
+        return MarketIndices.fromJson(response.data['result']);
+      }
+      throw Exception('주가 지수 로드 실패: ${response.data['message']}');
+    } on DioException catch (e) {
+      throw Exception('주가 지수 API 호출 실패: ${e.response?.data ?? e.message}');
     }
   }
 
