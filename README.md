@@ -1,15 +1,15 @@
-# StockPulse - Flutter Mobile App
+# StockPulse - Flutter Mobile App 📱
 
 ---
 
-## 개요
+## ✨개요 
 
 StockPulse는 Flutter로 개발된 뉴스 분석 및 주식 정보 제공 모바일 앱입니다.
 사용자는 실시간 주가 확인, 관심 종목 관리, 최신 뉴스 열람, 커뮤니티 소통, 알림 설정 등 다양한 기능을 이용할 수 있습니다.
 
 ---
 
-## 주요 기능
+## 💡주요 기능
 
 - 실시간 주가 데이터 스트리밍 및 보유/즐겨찾기 종목 관리  
 - 최신 주식 뉴스 및 즐겨찾기 뉴스 확인  
@@ -21,13 +21,13 @@ StockPulse는 Flutter로 개발된 뉴스 분석 및 주식 정보 제공 모바
 
 ---
 
-## 스크린샷
+## 📸스크린샷
 
  
 
 ---
 
-## 기술 스택
+## 🛠️기술 스택
 
 - Flutter (Dart)  
 - REST API (Dio)  
@@ -38,7 +38,7 @@ StockPulse는 Flutter로 개발된 뉴스 분석 및 주식 정보 제공 모바
 
 ---
 
-## 설치 및 실행
+## 🚀설치 및 실행
 
 1. Flutter SDK 설치: https://flutter.dev  
 2. 프로젝트 클론  
@@ -57,13 +57,13 @@ flutter run
 
 ---
 
-## 프로젝트 구조
+## 📂프로젝트 구조
 
-lib/
-├── models/ # 데이터 모델 정의
-├── screens/ # 주요 화면 위젯
-├── services/ # API 및 WebSocket 서비스
-├── providers/ # 상태 관리 프로바이더
-├── widgets/ # 재사용 위젯 컴포넌트
-└── main.dart # 앱 진입점 및 라우팅
+- lib/  
+&nbsp;&nbsp;&nbsp;&nbsp;├── models/             # 데이터 모델 정의  
+&nbsp;&nbsp;&nbsp;&nbsp;├── screens/            # 주요 화면 위젯  
+&nbsp;&nbsp;&nbsp;&nbsp;├── services/           # API 및 WebSocket 서비스  
+&nbsp;&nbsp;&nbsp;&nbsp;├── providers/          # 상태 관리 프로바이더  
+&nbsp;&nbsp;&nbsp;&nbsp;└── widgets/            # 재사용 위젯 컴포넌트  
+&nbsp;&nbsp;&nbsp;&nbsp;└── main.dart           # 앱 진입점 및 라우팅  
 
